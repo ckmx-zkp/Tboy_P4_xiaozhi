@@ -1,10 +1,8 @@
-# 小智 ESP32-P4 AI 宠物
-
-基于 [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32) 工程，目标硬件 Waveshare ESP32-P4-WIFI6-Touch-LCD-7B，做一个有眼睛、灯带、舵机和双路视觉的实体 AI 宠物变体。
-
-> 本仓库是个人开发 fork，主线开发基于 `AI_PET_DEV_PLAN_zh.md` 推进，视觉实时方案见 `AI_PET_VISION_REALTIME_PLAN_zh.md`。
+# 小智 ESP32-P4 AI 宠物开发计划
 
 ## 概要
+
+本计划基于当前 `xiaozhi-esp32` 工程，以及目标硬件 Waveshare ESP32-P4-WIFI6-Touch-LCD-7B。
 
 当前 7B 板卡支持已经覆盖 ESP32-P4、WiFi6/BT 协处理器、ES8311/ES7210 音频、OV5647 CSI 摄像头，以及原始 7 寸 MIPI LCD 显示路径。AI 宠物版本应作为一个独立板卡变体新增，而不是直接修改现有 7B 板卡实现。
 
@@ -301,6 +299,3 @@ AI 宠物板卡变体应覆写：
 - K230D 量产用裸模组跑官方 demo；前期验证可用 DFRobot HUSKYLENS 2（K230，出厂预置表情+朝向，UART/I2C 输出）快速跑通全链路，量产再换裸模组降本。
 - 详细视觉实时方案见 `AI_PET_VISION_REALTIME_PLAN_zh.md`（该文档上层状态机和事件门控可复用，推理后端章节需按 K230D 重写）。
 
-## 上游与致谢
-
-本工程派生自 [78/xiaozhi-esp32](https://github.com/78/xiaozhi-esp32)（MIT 协议）。
