@@ -1,5 +1,10 @@
 # 小智 ESP32-P4 AI 宠物开发计划
 
+> **进度跟踪**：日常完成情况、引脚表、阻塞项请维护  
+> [`AI_PET_PROGRESS_zh.md`](./AI_PET_PROGRESS_zh.md)  
+> **眼睛美术资产规格（给 AI 设计师）**：[`AI_PET_EYE_ASSETS_SPEC_zh.md`](./AI_PET_EYE_ASSETS_SPEC_zh.md)  
+> 约定：每完成可验证改动后同步更新进度文档。
+
 ## 概要
 
 本计划基于当前 `xiaozhi-esp32` 工程，以及目标硬件 Waveshare ESP32-P4-WIFI6-Touch-LCD-7B。
@@ -46,9 +51,11 @@ Waveshare 板卡参考资料：
 ### 双眼显示
 
 - 新增专用宠物眼睛显示层，例如 `PetEyeDisplay`。
-- 两个 TFT 屏共用一路 SPI 总线。
+- **不做**小智聊天 UI/字幕；调试信息只走串口 monitor。
+- 两个 TFT 屏共用一路 SPI 总线（调试期可先单屏单 CS）。
 - 左眼和右眼使用独立片选引脚。
 - DC、复位和背光引脚做成可配置项。
+- 动效方向：大圆「魔眼」（星云虹膜 + 瞳孔/高光 + 眨眼/说话脉动），非必须 LVGL 全 UI。
 - 第一版表情集合：
   - `neutral`
   - `listening`
@@ -61,6 +68,16 @@ Waveshare 板卡参考资料：
   - 瞳孔移动
   - 说话脉冲
   - 识别/思考扫描效果
+
+#### 当前单眼调试接线（2026-07-16）
+
+| 信号 | GPIO |
+|------|------|
+| SCL (SCLK) | IO2 |
+| SDA (MOSI) | IO3 |
+| DC | IO4 |
+| CS | IO5 |
+| RST | IO28 |
 
 ### WS2812 灯带
 

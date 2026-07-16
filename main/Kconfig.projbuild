@@ -429,6 +429,9 @@ choice BOARD_TYPE
     config BOARD_TYPE_WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_7B
         bool "Waveshare ESP32-P4-WIFI6-Touch-LCD-7B"
         depends on IDF_TARGET_ESP32P4
+    config BOARD_TYPE_WAVESHARE_ESP32_P4_AI_PET
+        bool "Waveshare ESP32-P4 AI Pet (no 7-inch MIPI, GC9A01 eyes)"
+        depends on IDF_TARGET_ESP32P4
     config BOARD_TYPE_WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_3_4C
         bool "Waveshare ESP32-P4-WIFI6-Touch-LCD-3.4C"
         depends on IDF_TARGET_ESP32P4

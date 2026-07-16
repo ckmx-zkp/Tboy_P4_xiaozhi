@@ -40,6 +40,8 @@ set(SOURCES "audio/audio_codec.cc"
             )
 
 set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols")
+# Optional board-specific embedded assets (e.g. AI pet eye frames)
+set(BOARD_EMBED_FILES "")
 
 # Add board common files
 list(APPEND SOURCES
@@ -537,6 +539,19 @@ elseif(CONFIG_BOARD_TYPE_WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_7B)
     set(BUILTIN_TEXT_FONT font_puhui_basic_30_4)
     set(BUILTIN_ICON_FONT font_awesome_30_4)
     set(DEFAULT_EMOJI_COLLECTION twemoji_64)
+elseif(CONFIG_BOARD_TYPE_WAVESHARE_ESP32_P4_AI_PET)
+    set(MANUFACTURER "waveshare")
+    set(BOARD_TYPE "esp32-p4-ai-pet")
+    set(BOARD_NAME "esp32-p4-ai-pet")
+    set(BUILTIN_TEXT_FONT font_puhui_basic_30_4)
+    set(BUILTIN_ICON_FONT font_awesome_30_4)
+    set(DEFAULT_EMOJI_COLLECTION twemoji_64)
+    # Experimental: 6 idle RGB565 frames (240x240) generated from eye_pic/
+    file(GLOB BOARD_EMBED_FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/waveshare/esp32-p4-ai-pet/assets/eye_idle_*.bin
+    )
+    list(LENGTH BOARD_EMBED_FILES _eye_n)
+    message(STATUS "AI Pet eye embed frames: ${_eye_n}")
 elseif(CONFIG_BOARD_TYPE_WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_3_4C)
     set(MANUFACTURER "waveshare")
     set(BOARD_TYPE "esp32-p4-wifi6-touch-lcd")
@@ -1032,7 +1047,7 @@ if(CONFIG_BOARD_TYPE_ESP_VOCAT)
 endif()
 
 idf_component_register(SRCS ${SOURCES}
-                    EMBED_FILES ${LANG_SOUNDS} ${COMMON_SOUNDS}
+                    EMBED_FILES ${LANG_SOUNDS} ${COMMON_SOUNDS} ${BOARD_EMBED_FILES}
                     INCLUDE_DIRS ${INCLUDE_DIRS}
                     WHOLE_ARCHIVE
                     PRIV_REQUIRES

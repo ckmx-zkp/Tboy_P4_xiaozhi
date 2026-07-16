@@ -1,5 +1,8 @@
 # Xiaozhi ESP32-P4 AI Pet Development Plan
 
+> **Progress tracker (Chinese, living doc):** [`AI_PET_PROGRESS_zh.md`](./AI_PET_PROGRESS_zh.md)  
+> Update that file after each verifiable hardware/software change.
+
 ## Summary
 
 This plan is based on the current `xiaozhi-esp32` project and the target Waveshare ESP32-P4-WIFI6-Touch-LCD-7B hardware.
