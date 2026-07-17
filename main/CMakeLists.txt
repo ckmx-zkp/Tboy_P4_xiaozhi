@@ -546,9 +546,17 @@ elseif(CONFIG_BOARD_TYPE_WAVESHARE_ESP32_P4_AI_PET)
     set(BUILTIN_TEXT_FONT font_puhui_basic_30_4)
     set(BUILTIN_ICON_FONT font_awesome_30_4)
     set(DEFAULT_EMOJI_COLLECTION twemoji_64)
-    # Experimental: 6 idle RGB565 frames (240x240) generated from eye_pic/
+    # C1 placeholder state images (240x240 RGB565) — replace with AI art later
     file(GLOB BOARD_EMBED_FILES
-        ${CMAKE_CURRENT_SOURCE_DIR}/boards/waveshare/esp32-p4-ai-pet/assets/eye_idle_*.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/waveshare/esp32-p4-ai-pet/assets/eye_master.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/waveshare/esp32-p4-ai-pet/assets/eye_happy.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/waveshare/esp32-p4-ai-pet/assets/eye_angry.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/waveshare/esp32-p4-ai-pet/assets/eye_sad.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/waveshare/esp32-p4-ai-pet/assets/eye_joy.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/waveshare/esp32-p4-ai-pet/assets/eye_blink_30.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/waveshare/esp32-p4-ai-pet/assets/eye_blink_70.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/waveshare/esp32-p4-ai-pet/assets/eye_blink_closed.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/waveshare/esp32-p4-ai-pet/assets/eye_closed.bin
     )
     list(LENGTH BOARD_EMBED_FILES _eye_n)
     message(STATUS "AI Pet eye embed frames: ${_eye_n}")

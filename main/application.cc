@@ -324,6 +324,17 @@ void Application::ActivationTask() {
     // Create OTA object for activation process
     ota_ = std::make_unique<Ota>();
 
+    // Print this device's identity once per boot so the binding can be checked
+    // against the xiaozhi backend (works whether or not activation is needed).
+    {
+        auto& board = Board::GetInstance();
+        ESP_LOGI(TAG, "================ Device Identity ================");
+        ESP_LOGI(TAG, "  Device-Id (MAC) : %s", SystemInfo::GetMacAddress().c_str());
+        ESP_LOGI(TAG, "  Client-Id (UUID): %s", board.GetUuid().c_str());
+        ESP_LOGI(TAG, "  User-Agent      : %s", SystemInfo::GetUserAgent().c_str());
+        ESP_LOGI(TAG, "=================================================");
+    }
+
     // Check for new assets version
     CheckAssetsVersion();
 
@@ -610,6 +621,17 @@ void Application::InitializeProtocol() {
 }
 
 void Application::ShowActivationCode(const std::string& code, const std::string& message) {
+    // Print the 6-digit activation code to the console once per boot, so it can
+    // be read from the serial log (boards without a usable UI, e.g. AI Pet eye).
+    static bool code_logged = false;
+    if (!code_logged) {
+        code_logged = true;
+        ESP_LOGI(TAG, "================================================");
+        ESP_LOGI(TAG, "  Activation code (6-digit): %s", code.c_str());
+        ESP_LOGI(TAG, "  %s", message.c_str());
+        ESP_LOGI(TAG, "================================================");
+    }
+
     struct digit_sound {
         char digit;
         const std::string_view& sound;

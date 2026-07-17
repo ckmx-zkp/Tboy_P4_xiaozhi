@@ -4,6 +4,7 @@
 #include "button.h"
 #include "config.h"
 #include "pet_eye_display.h"
+#include "eye_controller.h"
 #include "display/display.h"
 
 #include "esp_video.h"
@@ -23,6 +24,7 @@ private:
     i2c_master_bus_handle_t i2c_bus_ = nullptr;
     Button boot_button_;
     PetEyeDisplay* display_ = nullptr;
+    EyeController* eye_controller_ = nullptr;
     EspVideo* camera_ = nullptr;
     esp_lcd_panel_io_handle_t panel_io_ = nullptr;
     esp_lcd_panel_handle_t panel_ = nullptr;
@@ -116,6 +118,9 @@ public:
         InitializeSpiEye();
         InitializeCamera();
         InitializeButtons();
+        // Register eye MCP tools (self.eye.look/blink/set_emotion) so the cloud
+        // LLM can drive gaze/blink/emotion via tool_call.
+        eye_controller_ = new EyeController(display_);
         ESP_LOGI(TAG, "AI Pet board: audio+wifi+camera+single eye, chat UI on monitor only");
     }
 
