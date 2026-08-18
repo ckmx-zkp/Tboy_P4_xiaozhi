@@ -1,0 +1,11 @@
+# ESP32-S3-LCD-EV-Board-2（800x480），母板按 V1.5 脚（I2C SDA=47 / SCL=48）
+# 与 sdkconfig.defaults + sdkconfig.defaults.esp32s3 叠加使用。
+# 切回时：复制本文件对应的 sdkconfig.esp-s3-lcd-ev-board-2，或按下面选项重配。
+CONFIG_BOARD_TYPE_ESP_S3_LCD_EV_Board_2=y
+CONFIG_USE_DEVICE_AEC=y
+CONFIG_USE_DEFAULT_MESSAGE_STYLE=y
+CONFIG_USE_CUSTOM_WAKE_WORD=y
+CONFIG_CUSTOM_WAKE_WORD="ni hao xiao lu"
+CONFIG_CUSTOM_WAKE_WORD_DISPLAY="你好小鹿"
+CONFIG_CUSTOM_WAKE_WORD_THRESHOLD=20
+CONFIG_SR_MN_CN_MULTINET6_QUANT=y

@@ -1,0 +1,7 @@
+# ESP32-S3-BOX-3 / BOX-3B（主机相同，3B 只是配件更少）
+# 与 sdkconfig.defaults + sdkconfig.defaults.esp32s3 叠加使用。
+CONFIG_BOARD_TYPE_ESP_BOX_3=y
+CONFIG_USE_DEVICE_AEC=y
+CONFIG_USE_DEFAULT_MESSAGE_STYLE=y
+# 不用宠物眼 / 表情资源包，走官方 320x240 对话屏
+# CONFIG_USE_EMOTE_MESSAGE_STYLE is not set

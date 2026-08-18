@@ -198,10 +198,14 @@ private:
         };
         tp_io_config.scl_speed_hz = 400 * 1000;
         ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c(i2c_bus_, &tp_io_config, &tp_io_handle));
-        ESP_ERROR_CHECK(esp_lcd_touch_new_i2c_gt1151(tp_io_handle, &tp_cfg, &tp));
+        esp_err_t err = esp_lcd_touch_new_i2c_gt1151(tp_io_handle, &tp_cfg, &tp);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "GT1151 touch not found (%s), continue without touch", esp_err_to_name(err));
+            return;
+        }
 
         const lvgl_port_touch_cfg_t touch_cfg = {
-            .disp = lv_display_get_default(), 
+            .disp = lv_display_get_default(),
             .handle = tp,
         };
         lvgl_port_add_touch(&touch_cfg);
