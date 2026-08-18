@@ -2,7 +2,7 @@
 
 > **维护约定**：每次完成可验证的硬件/软件改动后，同步更新本文档（状态、引脚、文件路径、下一步）。  
 > 设计总纲见 `AI_PET_DEV_PLAN_zh.md`，视觉细节见 `AI_PET_VISION_REALTIME_PLAN_zh.md`。  
-> 最后更新：2026-07-18
+> 最后更新：2026-08-19
 
 ---
 
@@ -114,6 +114,9 @@ SCLK=2 MOSI=3 DC=4 CS=5 RST=28 SPI2_HOST 40MHz 240x240 GC9A01
 
 | 路径 | 说明 |
 |------|------|
+| `main/boards/esp-box-3/` | BOX-3 / BOX-3B 官方板型（未改源码） |
+| `sdkconfig.defaults.esp-box-3` | BOX-3 叠加默认：官方对话屏 + AEC |
+| `sdkconfig.esp32p4-ai-pet` | P4 工作配置备份（切回用） |
 | `main/boards/waveshare/esp32-p4-ai-pet/` | AI 宠物板型 |
 | `main/boards/waveshare/esp32-p4-ai-pet/pet_eye_display.{h,cc}` | 眼睛渲染：情绪/视线/眨眼/闭眼整帧切换 |
 | `main/boards/waveshare/esp32-p4-ai-pet/eye_controller.h` | 5 个眼睛 MCP 工具注册 |
@@ -126,24 +129,55 @@ SCLK=2 MOSI=3 DC=4 CS=5 RST=28 SPI2_HOST 40MHz 240x240 GC9A01
 
 ---
 
+## 并行板型：ESP32-S3-BOX-3B（2026-08-18）
+
+BOX-3B 与乐鑫 ESP-BOX-3 **同一块主机**（少配件）。只保留官方 320×240 对话屏 + 语音，不搬眼睛/灯带/舵机。
+
+| 项 | 值 |
+|----|-----|
+| 板型 | `BOARD_TYPE_ESP_BOX_3`（`main/boards/esp-box-3/`，未改官方板代码） |
+| 芯片 | ESP32-S3，16MB Flash |
+| 屏幕 | ILI9341 320×240，默认消息风格（非宠物眼、非表情资源包） |
+| 对话 | 自建 OTA + AFE「你好小智」+ 设备端 AEC |
+| 串口 | COM11 |
+| 配置备份 | `sdkconfig.esp-box-3` |
+
+## 并行板型：ESP32-S3-LCD-EV-Board V1.5（2026-08-19）
+
+当前工作树已纠正为此板。官方 480×480 RGB 对话屏 + 语音，不搬 P4 眼睛代码。
+
+| 项 | 值 |
+|----|-----|
+| 板型 | `BOARD_TYPE_ESP_S3_LCD_EV_Board`（`main/boards/esp-s3-lcd-ev-board/`） |
+| 母板 | V1.5：I2C SDA=IO47、SCL=IO48；RGB DATA6=IO8、DATA7=IO18 |
+| 芯片 | ESP32-S3 |
+| 屏幕 | GC9503 480×480 RGB |
+| 唤醒词 | 自定义 Multinet：`ni hao xiao lu` / 显示「你好小鹿」 |
+| 对话 | 自建 OTA + 设备端 AEC |
+| 串口 | COM15 |
+| 叠加默认 | `sdkconfig.defaults.esp-s3-lcd-ev-board` |
+| P4 眼睛 | 仍在 `main/boards/waveshare/esp32-p4-ai-pet/`，仅选 P4 板型时编译 |
+
+三块板用 `sdkconfig` 的 Board Type 区分；P4 ↔ S3 还要 `idf.py set-target`。切回 BOX-3：复制 `sdkconfig.esp-box-3` → `sdkconfig` 再编。
+
 ## 进行中 / 阻塞
 
 | 项 | 说明 |
 |----|------|
 | 单眼点亮 | ✅ 已确认有基础魔眼 + 眨眼 |
 | 颜色偏黄绿 | 当前程序化色环效果，可后续换底图/调色 |
+| BOX-3B 对话+屏幕 | 🟡 已起板联调；睡觉/待机不挂断（无眼睛工具，S2 走不通） |
+| LCD EV Board | 🟡 已用 IDF 5.5.2 构建并烧录 COM15。MAC `90:e5:b1:a8:ed:80`；串口已看到 speaking/listening 循环，说明联网语音会话运行。待复位后补齐完整启动日志及目视 480×480 屏验证 |
 
 ---
 
 ## 下一步（按优先级）
 
-1. ~~烧录并点亮单眼~~ ✅  
-2. ~~眼睛视线/眨眼/情绪 MCP 化~~ ✅（语音驱动已验证；`close`/`open` 语音命令待实测）  
-3. **第二块屏**：共 SPI，右眼 `CS=IO29`，左右同步/镜像  
-4. 状态机映射：listening/speaking 驱动眼睛（不仅 `SetEmotion`）  
-5. 魔眼观感增强：换 AI 美术底图（GPT/Grok，暂缓）/ 更自然眨眼与高光  
-6. WS2812 + 双舵机  
-7. K230 UART 视觉  
+1. **LCD EV Board**：复位并验 480×480 屏 +「你好小鹿」唤醒，持续收集 COM15 日志
+2. BOX-3B 睡觉挂断：改 xiaozhi-server S2（不依赖 `self.eye.close`）
+3. ~~烧录并点亮单眼~~ ✅（P4）
+4. **第二块屏**（P4）：共 SPI，右眼 `CS=IO29`
+5. WS2812 + 双舵机 / K230 视觉（P4，后置）
 
 ---
 
@@ -171,3 +205,7 @@ SCLK=2 MOSI=3 DC=4 CS=5 RST=28 SPI2_HOST 40MHz 240x240 GC9A01
 | 2026-07-18 | 新增 `eye_controller.h` 注册 5 个眼睛 MCP 工具（look/blink/close/open/set_emotion）；语音链路端到端验证通过（无需后台配置/自建云） |
 | 2026-07-18 | `application.cc` 每次开机打印 Device Identity（MAC/UUID/User-Agent）+ 仅一次 6 位验证码 |
 | 2026-07-18 | 激活排查：清 flash/NVS 无效——Serial-Number 在 eFuse，服务器 Activation-Version 2 直接放行；设备已激活但绑定账号与当前「星仔」不一致，需服务端解绑 |
+| 2026-08-18 | **切到 ESP32-S3-BOX-3B**：P4 `sdkconfig` 备份为 `sdkconfig.esp32p4-ai-pet`；目标 `esp32s3` + 官方 `esp-box-3`；默认对话屏 + 设备端 AEC + 自建 OTA。未搬眼睛/外设。S3 全量编译通过（约 2.7MB，余量 31%），待烧录 |
+| 2026-08-18 | **切到 ESP32-S3-LCD-EV-Board-2 V1.5**：BOX-3 配置备份为 `sdkconfig.esp-box-3`；唤醒词改为自定义 Multinet「你好小鹿」；串口 COM15。P4 眼睛代码未动。待编译烧录 |
+| 2026-08-18 | LCD EV Board 2 已烧录 COM15：SKU 正确、WiFi `192.168.0.106`、OTA 自建、激活码 `650181`。GT1151 触摸 I2C 失败改为跳过，避免重启循环。 |
+| 2026-08-19 | **纠正板型为 ESP32-S3-LCD-EV-Board V1.5**：选择 `BOARD_TYPE_ESP_S3_LCD_EV_Board` + 1.5 引脚，GC9503 480×480；IDF 5.5.2 构建成功（应用分区余 29%）并烧录 COM15，写入哈希全通过。后台日志追加至 `logs/260819_COM15.log`。 |
