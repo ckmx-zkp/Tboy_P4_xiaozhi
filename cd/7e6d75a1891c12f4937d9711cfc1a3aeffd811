@@ -1,0 +1,14 @@
+AI_PET主动唤醒与主动播报协作看板_zh.md
+  h_63bd3ffc12fa56 1-311
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "cd7e6d75a1891c12f4937d9711cfc1a3aeffd811",
+  "prompts": {},
+  "humans": {
+    "h_63bd3ffc12fa56": {
+      "author": "kunpeng2.zhang <kunpeng2.zhang@ly.com>"
+    }
+  }
+}
