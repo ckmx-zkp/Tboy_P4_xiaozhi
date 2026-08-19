@@ -1,0 +1,22 @@
+AI_PET_PROGRESS_zh.md
+  s_50a069c5b414d1::t_54251d9af97f80 171,213
+AI_PET_DEV_PLAN_zh.md
+  s_50a069c5b414d1::t_54251d9af97f80 249-279
+  s_50a069c5b414d1::t_5933d264907be9 280-281
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "9a977b2b57ec7eeeed82cbbbd59f734cb9c357be",
+  "prompts": {},
+  "sessions": {
+    "s_50a069c5b414d1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a018a2-a79d-7722-8aae-023b59a77c69",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "kunpeng2.zhang <kunpeng2.zhang@ly.com>"
+    }
+  }
+}
