@@ -100,11 +100,13 @@ void McpServer::AddCommonTools() {
     auto camera = board.GetCamera();
     if (camera) {
         AddTool("self.camera.take_photo",
-            "Always remember you have a camera. If the user asks you to see something, use this tool to take a photo and then explain it.\n"
+            "本设备有实体摄像头。用户说看、看看我、再看看、拍照、拍张照、用摄像头时，"
+            "必须立刻调用本工具，不要先说话。禁止口头说正在拍、已经拍了或相机不可用。\n"
+            "Always use this tool to see. Never claim the camera is unavailable.\n"
             "Args:\n"
-            "  `question`: The question that you want to ask about the photo.\n"
+            "  `question`: 要问这张照片的问题，例如：请描述照片中的人物外貌。\n"
             "Return:\n"
-            "  A JSON object that provides the photo information.",
+            "  识图 JSON。若 success 为 false，据实转述服务端原因，不要说设备没有相机。",
             PropertyList({
                 Property("question", kPropertyTypeString)
             }),

@@ -2,7 +2,7 @@
 
 > **维护约定**：每次完成可验证的硬件/软件改动后，同步更新本文档（状态、引脚、文件路径、下一步）。  
 > 设计总纲见 `AI_PET_DEV_PLAN_zh.md`，视觉细节见 `AI_PET_VISION_REALTIME_PLAN_zh.md`。  
-> 最后更新：2026-08-19
+> 最后更新：2026-09-13
 
 ---
 
@@ -118,6 +118,7 @@ SCLK=2 MOSI=3 DC=4 CS=5 RST=28 SPI2_HOST 40MHz 240x240 GC9A01
 | `sdkconfig.defaults.esp-box-3` | BOX-3 叠加默认：官方对话屏 + AEC |
 | `sdkconfig.esp32p4-ai-pet` | P4 工作配置备份（切回用） |
 | `main/boards/waveshare/esp32-p4-ai-pet/` | AI 宠物板型 |
+| `main/boards/aipet/esp32-s3-usb-cam/` | S3 USB 摄像头大板（2026-08-25 原理图） |
 | `main/boards/waveshare/esp32-p4-ai-pet/pet_eye_display.{h,cc}` | 眼睛渲染：情绪/视线/眨眼/闭眼整帧切换 |
 | `main/boards/waveshare/esp32-p4-ai-pet/eye_controller.h` | 5 个眼睛 MCP 工具注册 |
 | `scripts/gen_placeholder_eyes.py` | 占位 C1 资产生成脚本 |
@@ -160,6 +161,23 @@ BOX-3B 与乐鑫 ESP-BOX-3 **同一块主机**（少配件）。只保留官方 
 
 三块板用 `sdkconfig` 的 Board Type 区分；P4 ↔ S3 还要 `idf.py set-target`。切回 BOX-3：复制 `sdkconfig.esp-box-3` → `sdkconfig` 再编。
 
+## 并行板型：AI Pet ESP32-S3 USB 摄像头大板（2026-09-05）
+
+按 `D:/User/SCH_USB摄像头大板_2026-09-13.pdf` 核过屏脚；旧 08-25 网表仅作对照。不改 P4 / BOX-3 / LCD EV。
+
+| 项 | 值 |
+|----|-----|
+| 板型 | `BOARD_TYPE_AIPET_ESP32_S3_USB_CAM` |
+| 目录 | `main/boards/aipet/esp32-s3-usb-cam/` |
+| 芯片 | ESP32-S3-WROOM-2-N32R16V（用户确认：32MB Flash + 16MB Octal PSRAM） |
+| 当前软件 | WiFi + ES8311/ES7210 + 双眼 GC9107 + 两颗 WS2812（MCP 星座/表情）；舵机/4G/K230 只登记引脚 |
+| 引脚真源 | 同目录 `BOARD.md`、`config.h` |
+| 眼睛屏 | XJ0.99TFT-12P / GC9107 / 128×115；厂方初始化 `gc9107_boe_099_init.h` |
+| 硬件门禁 | PA_EN=GPIO46 仅输入；4G UART 原理图仍标 1.8V?；真机 COM25 / `d8:85:ac:ba:85:d8` |
+| Flash/PSRAM | `FLASHSIZE_32MB` + `partitions/v2/32m.csv` + `SPIRAM_MODE_OCT` 80MHz；不强制 `OCT_FLASH`（bootloader 会自动切 Octal） |
+
+选中本板需 `idf.py set-target esp32s3` 后在 menuconfig 选该 Board Type。不要覆盖现有 LCD EV / P4 的 `sdkconfig`。
+
 ## 进行中 / 阻塞
 
 | 项 | 说明 |
@@ -168,6 +186,7 @@ BOX-3B 与乐鑫 ESP-BOX-3 **同一块主机**（少配件）。只保留官方 
 | 颜色偏黄绿 | 当前程序化色环效果，可后续换底图/调色 |
 | BOX-3B 对话+屏幕 | 🟡 已起板联调；睡觉/待机不挂断（无眼睛工具，S2 走不通） |
 | LCD EV Board | 🟡 已用 IDF 5.5.2 构建并烧录 COM15。MAC `90:e5:b1:a8:ed:80`；串口已看到 speaking/listening 循环，说明联网语音会话运行。待复位后补齐完整启动日志及目视 480×480 屏验证 |
+| S3 USB 摄像头大板 | 🟡 COM25 拍照+识图已通。眼睛已改 128×160 居中铺满（修偏上），待烧录目视。喇叭仍受 PA_EN=GPIO46 限制 |
 | BLE 偶遇双 AI 交流 | 🔴 需求已校正、零实现：匿名发现 → 主人同意 → 换短期 token → 双方上报 → backend 生成内容；BLE 包格式、双边同意和空闲控制通道待冻结 |
 
 ---
@@ -178,7 +197,8 @@ BOX-3B 与乐鑫 ESP-BOX-3 **同一块主机**（少配件）。只保留官方 
 2. BOX-3B 睡觉挂断：改 xiaozhi-server S2（不依赖 `self.eye.close`）
 3. ~~烧录并点亮单眼~~ ✅（P4）
 4. **第二块屏**（P4）：共 SPI，右眼 `CS=IO29`
-5. WS2812 + 双舵机 / K230 视觉（P4，后置）
+5. **S3 大板**：眼睛改为 128×160 居中铺满（修偏上）。两颗 WS2812 已挂 MCP。待烧录目视虹膜是否居中。飞线 PA_EN 后再验喇叭
+6. 双舵机 / K230 视觉（S3 引脚已登记，后置）
 
 ---
 
@@ -211,3 +231,24 @@ BOX-3B 与乐鑫 ESP-BOX-3 **同一块主机**（少配件）。只保留官方 
 | 2026-08-18 | LCD EV Board 2 已烧录 COM15：SKU 正确、WiFi `192.168.0.106`、OTA 自建、激活码 `650181`。GT1151 触摸 I2C 失败改为跳过，避免重启循环。 |
 | 2026-08-19 | **纠正板型为 ESP32-S3-LCD-EV-Board V1.5**：选择 `BOARD_TYPE_ESP_S3_LCD_EV_Board` + 1.5 引脚，GC9503 480×480；IDF 5.5.2 构建成功（应用分区余 29%）并烧录 COM15，写入哈希全通过。后台日志追加至 `logs/260819_COM15.log`。 |
 | 2026-08-19 | **校正双 AI 交流需求**：改为户外低速 BLE 匿名发现，主人同意后交换短期 token，双方经云端上报，由 backend 生成本次受控播报内容；不再采用 App/智控台配对或实时语音会话桥。当前仅文档，固件零实现。 |
+| 2026-09-05 | **新增独立板型 `esp32-s3-usb-cam`**：按 2026-08-25 USB 摄像头大板原理图/网表登记 GPIO；当前仅 WiFi+音频骨架。PA_EN=GPIO46 仅输入、4G UART 电平未关闭，未初始化眼睛/灯带/舵机/4G/K230。 |
+| 2026-09-13 | **S3 大板眼睛改为 XJ0.99TFT-12P / GC9107 128×115**：写入 BOE 厂方初始化，背光按 P-MOS 低电平点亮；开机左红右蓝，不显示聊天 UI。未改 P4 眼睛资产。 |
+| 2026-09-13 | **COM25 原为 bread-compact-wifi**：咪头/屏脚全错。已切 32MB `esp32-s3-usb-cam` 并烧录。ES7210 须用 8-bit 地址 `0x82`（默认 `0x80` 会断言重启）。真机：I2C 0x18/0x41、双眼 init、codec 已启动；WiFi NVS 已空需重配。 |
+| 2026-09-13 | **S3 大板已重配网并激活**：`TP-LINK_C738` / `192.168.0.107`，MAC `d8:85:ac:ba:85:d8`。32m.csv 的 16MB assets 在 S3 上因 MMU 空闲页仅 14144 KB 被整分区 mmap 关掉，唤醒词未加载。`assets.cc` 改为先读头部再按实际长度映射。I2S disable 告警可忽略。喇叭仍受 PA_EN=GPIO46 限制。 |
+| 2026-09-13 | **S3 大板 U4 UVC 真机通过**：关掉 USB-Serial-JTAG 后 Host 枚举到 1 个设备；320×240 不支持，640×480 MJPEG 连取 3 帧（约 36–41 KB）。未接 MCP/聊天。双眼仍只有背光。 |
+| 2026-09-13 | **S3 大板摄像头接入 MCP**：本板 `UvcCamera` 实现 `GetCamera()`，注册 `self.camera.take_photo`；拍照走已验证的 640×480 MJPEG，JPEG 直传 explain。开机探测已去掉以免占 Host。 |
+| 2026-09-13 | **UVC 拍照中断占满**：对话中途 `usb_host_install` 报 `No free interrupt inputs`。USB Host 改为板级构造最早安装，避开 I2S/WiFi 占 Level1+IRAM。固件已增量编过，待 `idf.py -p COM25 app-flash`。 |
+| 2026-09-13 | 用户确认模组为 **ESP32-S3-WROOM-2 / 16MB PSRAM / 32MB Flash**（即 N32R16V）。`sdkconfig` 已是 32MB + Octal PSRAM 80MHz，未再改容量。 |
+| 2026-09-13 | **S3 大板拍照已通、识图未通**：`captured 640x480 jpeg 17108` 后 HTTP 连上 8003；约 280ms 结束，LLM 回复「相机暂时用不了」。8003 GET 正常。固件补 JPEG SOI/EOI 校验并打印 explain 原文，便于区分坏帧 vs 未配 VLLM。 |
+| 2026-09-13 | **S3 大板一次连拍 3 帧**：`take_photo` 在同一次开流里取 3 张完整 JPEG，竖向拼成 640×1440 再上传。8003 只收单文件，拼图失败则退回最大单帧。已增量编译，未烧录。 |
+| 2026-09-13 | **「看看我」未调工具**：开机已注册 `self.camera.take_photo`，hello 已下发 vision.url+token。本轮只有口头「相机暂时还看不到我」，无 UVC 日志。加强工具中文说明，禁止模型声称无相机。 |
+| 2026-09-13 | **S3 大板识图真机通过**：`burst 3 frames -> 640x1440` 86KB，8003 HTTP 200 `success:true`，模型描述了自拍连拍人物。问题：画面横置 90°、`<think>` 被 TTS 念出、上传约 4s 时 AFE FEED 堵满。固件改为顺时针转 90°、剥 think、拍照期间关麦。 |
+| 2026-09-13 | 「再看看我」仍描述横置自拍；「拍张照」和「必须调用工具」只有口头应付，无 UVC 日志。工具说明补上拍张照/再看看，禁止假装已拍。转正固件待烧。 |
+| 2026-09-13 | **按 09-13 原理图改眼睛 SPI**：FPC SCL→GPIO40、SDA→GPIO41，不再按网表名 MOSI/SCK。时钟 10MHz。待烧录目视红蓝。 |
+| 2026-09-13 | **S3 大板眼睛下半花屏**：上半红/蓝正常，判定为 GC9107 GRAM 128×160 只刷了 115 行。改为刷满 160 行并等 SPI 排空再释放缓冲。待烧录目视。 |
+| 2026-09-13 | 新增 GPT Image 一次性复制文档 `AI_PET_EYE_GPT_IMAGE_PROMPTS_zh.md`（C1 共 8 张：Master + 喜怒哀乐 + 眨眼 3 帧）。 |
+| 2026-09-13 | **S3 大板两颗 WS2812**：GPIO3 DIN + GPIO15 EN。MCP `self.led.set_zodiac`（12 星座）/`set_emotion`/`off`，色系内随机。不接系统状态灯。待烧录话术验收。 |
+| 2026-09-13 | **S3 大板双眼 C1**：`image/` 转 128×115 右眼资产，左眼刷屏镜像。MCP `self.eye.look/blink/close/open/set_emotion/get_state` 与灯色工具分离；心情话术由模型同一轮各调一次。 |
+| 2026-09-13 | **S3 眼睛偏上**：圆屏能看到整段 160 行 GRAM，旧资产 128×115 贴顶导致虹膜偏上约一半。改为 128×160 居中铺满（虹膜放大到 160 高再裁宽）。待烧录目视。 |
+| 2026-09-13 | **S3 眼睛二次微调**：160 铺满仍偏上约 15% 且比 0.99 寸圆屏显大。改为 108×108 圆眼 + 下移 20px。 |
+| 2026-09-13 | **S3 眼睛换图烧录**：`image/` 新图已转 128×160 bin（含更新的 happy/joy），COM25 `app-flash` 完成并开 monitor。 |

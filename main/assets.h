@@ -65,6 +65,7 @@ private:
         std::map<std::string, Asset> assets_;
         esp_partition_mmap_handle_t mmap_handle_ = 0;
         const char* mmap_root_ = nullptr;
+        size_t mmap_size_ = 0;
         bool checksum_valid_ = false;
     };
     

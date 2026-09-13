@@ -1,53 +1,54 @@
-# AI Pet 眼睛 C1 素材 Prompt
+# GPT Image 眼睛出图 Prompt（C1 一次性复制）
 
-> 用途：为 AI Pet 的 240×240 GC9A01 圆形眼睛屏生成 C1 方案所需的完整图片。
->
-> C1 不是图层合成方案。每个资源都是一张完整的 240×240 图片，固件根据当前状态选择图片，并负责播放速度、亮度、轻微缩放、镜像和眨眼时序。第一批建议生成 1 张 Master、4 张情绪图和 3 张眨眼关键帧，共 8 张图片。
->
-> 版本：2026-07-17  
-> GPT Image 一次性复制版：`AI_PET_EYE_GPT_IMAGE_PROMPTS_zh.md`
+> 给 **ChatGPT · GPT Image** 用。同一对话、一次只出一张。  
+> 固件 C1 只要下面 **8 张**；睡眠闭眼、视线、左眼都不用 AI。  
+> 规格真源：`AI_PET_EYE_C1_PROMPTS_zh.md`。流程说明：`AI_PET_EYE_AI_IMAGE_PIPELINE_zh.md`。  
+> 版本：2026-09-13
 
 ---
 
-## 1. C1 资源清单
+## 怎么用
 
-| 文件名 | 用途 | 是否作为参考图 |
-|---|---|---|
-| `eye_master.png` | 默认中性眼，也是所有后续图片的唯一视觉锚点 | 初始生成 |
-| `eye_happy.png` | 喜：温和、亲近、开心 | 使用 Master 编辑 |
-| `eye_angry.png` | 怒：明确、有力量，但仍然可爱 | 使用 Master 编辑 |
-| `eye_sad.png` | 哀：安静、低落、温柔 | 使用 Master 编辑 |
-| `eye_joy.png` | 乐：活泼、兴奋、强烈快乐 | 使用 Master 编辑 |
-| `eye_blink_30.png` | 眨眼：闭合约 30% | 使用 Master 编辑 |
-| `eye_blink_70.png` | 眨眼：闭合约 70% | 使用 Master 编辑 |
-| `eye_blink_closed.png` | 眨眼：接近完全闭合 | 使用 Master 编辑 |
-
-Master 同时作为 `neutral` 默认状态使用，因此不需要另外生成一张 `eye_neutral.png`。
-
-所有后续图片都必须使用同一张 `eye_master.png` 作为参考图，并尽量在同一个 AI 会话中完成。同一个 Prompt 不要同时生成多张不同状态；每个状态单独生成、单独保存和检查。
+1. 新开一个 ChatGPT 对话，先发 **§0 开场白**。
+2. 出图比例选 **正方形 1:1**（1024 即可）。不要直接出 128×115。
+3. 用 **§1** 文生 Master，可连出 6～8 张，**只锁 1 张**，保存为 `eye_master.png`，此后不要改它。
+4. 后面每张都 **上传 `eye_master.png` 做编辑**，不要重新文生图。
+5. 每条编辑先贴 **§锁图前缀**，再贴对应中文 Prompt。
+6. 跑偏就回：`瞳孔和高光必须和参考图完全一致，只改我指定的情绪/眼皮，重做这一张。`
+7. 8 张齐了再转 RGB565 上板。
 
 ---
 
-## 2. 所有图片都必须遵守的固定约束
+## 0. 开场白（新对话第一条）
 
-以下约束已经写入各个 Prompt 中，不能只依赖本节。每次编辑时都应上传 `eye_master.png`，并明确要求“只修改指定的情绪或眼皮”。
-
-- 只显示一只电子宠物眼睛，不要第二只眼睛、人脸、身体、耳朵、毛发、手或设备外框。
-- 正面视角，眼睛和瞳孔居中，正方形 1:1 构图。
-- 眼睛圆形主体尽量填满 240×240 画布，圆外保持纯黑 `#000000`。
-- 固定虹膜半径、瞳孔中心、瞳孔形状、圆形边界和高光位置。
-- 左上区域保留一大一小两个冷白色高光；除非 Prompt 明确要求，否则不要移动、增加或删除高光。
-- 使用极光蓝、电光青和少量淡紫色星云；不要大幅改变主色。
-- 适合 RGB565：避免小于约 2 像素的细线、过密星点和复杂噪声。
-- 不要文字、字幕、数字、Logo、水印、UI 按钮、边框或棋盘格透明背景。
-- 不要写实人类眼球、血丝、恐怖效果、泪水流淌或真实解剖结构。
-- 后续图片必须像同一个角色，不得重新设计眼睛。
+```text
+You are helping me make still images for a 240x240 round GC9A01 pet-eye display.
+I will first generate ONE master eye, then edit that same image for emotions and blink frames.
+All later images must match the master exactly: same iris, pupil center, highlights, palette, circular boundary.
+Only change the specific emotion or eyelid I request.
+Square 1:1, pure black #000000 outside the circular eye, no text, no UI, no body, no second eye.
+I will request one image at a time.
+```
 
 ---
 
-## 3. Prompt 0：生成 Master 锚点图
+## 锁图前缀（每张编辑都先贴）
 
-**用途：** 生成唯一的视觉基准。生成候选时可以让 GPT Image 和 Grok Image 分别产生多张，但最终只能选定一张作为 `eye_master.png`。后续所有图片都基于这一张编辑。
+```text
+Use the uploaded eye_master.png as the single and exact visual reference.
+Keep the same character, same circular eye boundary, same iris radius, same pupil
+center, same pupil shape, same highlights, same palette and same composition.
+Only change the specific emotion or eyelid movement requested below.
+Do not redesign the eye. Do not create a second eye, face, body or any extra object.
+Pure black outside the circular eye. Square 1:1 composition, suitable for a
+240x240 RGB565 round display. No text, logo, watermark, UI or checkerboard.
+```
+
+---
+
+## 1. Master（文生图）→ `eye_master.png`
+
+可连出多张，只选定一张。标准：圆够大、瞳孔正中、左上双高光干净、圆外真纯黑、缩小仍清楚、无文字杂物。
 
 ```text
 请生成一只电子宠物的单眼主视觉，用于 240×240 像素圆形 GC9A01 表情屏。
@@ -67,13 +68,11 @@ Master 同时作为 `neutral` 默认状态使用，因此不需要另外生成�
 最终画面必须适合缩小到 240×240 像素并转换为 RGB565，避免小于约 2 像素的细碎线条。不要文字、字幕、数字、Logo、水印、UI 按钮、手机、显示器、相框或任何其他物体。
 ```
 
-**Master 选定标准：** 眼睛圆且足够大，瞳孔接近正中心，左上双高光位置自然，圆外是真正纯黑，缩小到 240×240 后仍然清晰，并且没有任何文字或额外物体。选定后保存为 `eye_master.png`，不要再随意修改这张图。
-
 ---
 
-## 4. Prompt 1：生成喜 `eye_happy.png`
+## 2. 喜 → `eye_happy.png`
 
-**操作：** 上传 `eye_master.png`，使用图像编辑。不要使用全新的文生图。生成后保存为 `eye_happy.png`。
+上传 `eye_master.png` → 编辑。先贴锁图前缀，再贴下面。
 
 ```text
 请以我上传的 eye_master.png 作为唯一参考，生成同一只电子宠物眼睛的“喜”表情完整图片。
@@ -89,9 +88,9 @@ Master 同时作为 `neutral` 默认状态使用，因此不需要另外生成�
 
 ---
 
-## 5. Prompt 2：生成怒 `eye_angry.png`
+## 3. 怒 → `eye_angry.png`
 
-**操作：** 上传 `eye_master.png`，使用图像编辑。不要使用全新的文生图。生成后保存为 `eye_angry.png`。
+上传 `eye_master.png` → 编辑。先贴锁图前缀，再贴下面。
 
 ```text
 请以我上传的 eye_master.png 作为唯一参考，生成同一只电子宠物眼睛的“怒”表情完整图片。
@@ -107,9 +106,9 @@ Master 同时作为 `neutral` 默认状态使用，因此不需要另外生成�
 
 ---
 
-## 6. Prompt 3：生成哀 `eye_sad.png`
+## 4. 哀 → `eye_sad.png`
 
-**操作：** 上传 `eye_master.png`，使用图像编辑。不要使用全新的文生图。生成后保存为 `eye_sad.png`。
+上传 `eye_master.png` → 编辑。先贴锁图前缀，再贴下面。
 
 ```text
 请以我上传的 eye_master.png 作为唯一参考，生成同一只电子宠物眼睛的“哀”表情完整图片。
@@ -125,11 +124,9 @@ Master 同时作为 `neutral` 默认状态使用，因此不需要另外生成�
 
 ---
 
-## 7. Prompt 4：生成乐 `eye_joy.png`
+## 5. 乐 → `eye_joy.png`
 
-**操作：** 上传 `eye_master.png`，使用图像编辑。不要使用全新的文生图。生成后保存为 `eye_joy.png`。
-
-“喜”是温和开心，“乐”是活泼、兴奋、能量更强，必须让两者有明显区别，但不能改变角色设计。
+上传 `eye_master.png` → 编辑。先贴锁图前缀，再贴下面。要比「喜」更兴奋，但不能换角色。
 
 ```text
 请以我上传的 eye_master.png 作为唯一参考，生成同一只电子宠物眼睛的“乐”表情完整图片。
@@ -145,9 +142,9 @@ Master 同时作为 `neutral` 默认状态使用，因此不需要另外生成�
 
 ---
 
-## 8. Prompt 5：眨眼 30% `eye_blink_30.png`
+## 6. 眨眼 30% → `eye_blink_30.png`
 
-**操作：** 上传 `eye_master.png`，使用图像编辑。只修改眼皮，不要改变底层眼睛设计。生成后保存为 `eye_blink_30.png`。
+上传 `eye_master.png` → 编辑。先贴锁图前缀，再贴下面。只改眼皮。
 
 ```text
 请以我上传的 eye_master.png 作为唯一参考，生成同一只电子宠物眼睛的眨眼动画第 1 个关键帧。
@@ -161,9 +158,9 @@ Master 同时作为 `neutral` 默认状态使用，因此不需要另外生成�
 
 ---
 
-## 9. Prompt 6：眨眼 70% `eye_blink_70.png`
+## 7. 眨眼 70% → `eye_blink_70.png`
 
-**操作：** 上传 `eye_master.png`，使用图像编辑。只修改眼皮，不要改变底层眼睛设计。生成后保存为 `eye_blink_70.png`。
+上传 `eye_master.png` → 编辑。先贴锁图前缀，再贴下面。
 
 ```text
 请以我上传的 eye_master.png 作为唯一参考，生成同一只电子宠物眼睛的眨眼动画第 2 个关键帧。
@@ -177,9 +174,9 @@ Master 同时作为 `neutral` 默认状态使用，因此不需要另外生成�
 
 ---
 
-## 10. Prompt 7：接近闭眼 `eye_blink_closed.png`
+## 8. 接近闭眼 → `eye_blink_closed.png`
 
-**操作：** 上传 `eye_master.png`，使用图像编辑。只修改眼皮，不要改变底层眼睛设计。生成后保存为 `eye_blink_closed.png`。
+上传 `eye_master.png` → 编辑。先贴锁图前缀，再贴下面。这是眨眼关键帧，不是睡觉。
 
 ```text
 请以我上传的 eye_master.png 作为唯一参考，生成同一只电子宠物眼睛的眨眼动画接近闭合关键帧。
@@ -193,75 +190,18 @@ Master 同时作为 `neutral` 默认状态使用，因此不需要另外生成�
 
 ---
 
-## 11. GPT Image / Grok Image 通用编辑前缀
+## 不用出的图
 
-如果工具容易改变角色，可以在每个情绪或眨眼 Prompt 前追加下面这段英文约束：
-
-```text
-Use the uploaded eye_master.png as the single and exact visual reference.
-Keep the same character, same circular eye boundary, same iris radius, same pupil
-center, same pupil shape, same highlights, same palette and same composition.
-Only change the specific emotion or eyelid movement requested below.
-Do not redesign the eye. Do not create a second eye, face, body or any extra object.
-Pure black outside the circular eye. Square 1:1 composition, suitable for a
-240x240 RGB565 round display. No text, logo, watermark, UI or checkerboard.
-```
-
-然后在后面追加对应的中文状态描述即可。英文编辑描述可以追加：
-
-```text
-For the requested emotion, keep the iris radius and pupil center fixed. Preserve
-the two cold-white highlights in the upper-left area. Use clean broad gradients
-and readable shapes; avoid tiny details that would disappear after RGB565
-conversion.
-```
+| 文件 / 需求 | 原因 |
+|-------------|------|
+| `eye_closed` / 睡眠 | 固件用纯黑 240×240，不用 GPT |
+| 上看 / 下看 / 左看 / 右看 | 固件平移同一张图 |
+| 左眼 | 固件水平镜像 |
+| idle / speak / listen 连续帧 | 后一档包 B（32 张），C1 不上板 |
 
 ---
 
-## 12. 眨眼播放建议
-
-C1 的眨眼不是把 `eye_blink_30.png` 永久设置为当前表情，而是一个短暂的播放序列。建议时序如下：
-
-```text
-eye_[current_emotion].png
-→ eye_blink_30.png
-→ eye_blink_70.png
-→ eye_blink_closed.png
-→ eye_blink_70.png
-→ eye_[current_emotion].png
-```
-
-建议总时长约 160～240 ms：
-
-| 资源 | 建议停留 |
-|---|---:|
-| `blink_30` | 40～60 ms |
-| `blink_70` | 30～45 ms |
-| `blink_closed` | 35～55 ms |
-| `blink_70` | 30～45 ms |
-
-眨眼关键帧是完整图片，因此第一版固件可以直接切换图片，不需要透明度合成。后续如果发现眨眼仍不够自然，再升级到 C2 的眼皮透明图层方案。
-
----
-
-## 13. 生成后验收清单
-
-每张图片都要先在电脑上缩放到 240×240，再检查：
-
-- 是否仍然是同一只眼睛，而不是重新生成了新角色。
-- 虹膜半径是否一致。
-- 瞳孔是否仍在同一中心位置。
-- 左上两个高光是否基本固定。
-- 圆外是否为纯黑，没有灰底或棋盘格。
-- 是否只有一只眼睛，没有脸、身体或额外物体。
-- 喜和乐是否有区别，但没有变成两个不同角色。
-- 怒是否有力度但不恐怖。
-- 哀是否低落但不出现眼泪和人脸。
-- 眨眼是否是自然弧形眼皮，而不是上下矩形黑条。
-- 缩小后是否仍然清晰，星云是否没有变成 RGB565 噪点。
-- 图片是否为正方形，最终可统一裁切为 240×240 PNG。
-
-通过验收后再转换为 RGB565。建议命名和生成顺序保持一致：
+## 落盘命名
 
 ```text
 eye_master.png
@@ -274,4 +214,17 @@ eye_blink_70.png
 eye_blink_closed.png
 ```
 
-C1 首批资源总数为 **8 张**，其中 `eye_master.png` 同时承担默认 `neutral` 状态，不需要再额外生成一张中性图。
+建议目录：`eye_pic/final/png_240/`。先高清正方形，上板前再缩到 240×240。S3 的 128×115 屏也先按 1:1 出图，转换时再裁切缩放。
+
+---
+
+## 出图后自检
+
+- 仍是同一只眼睛，没有换角色。
+- 虹膜半径、瞳孔中心、左上双高光基本固定。
+- 圆外纯黑，无灰底、无棋盘格。
+- 只有一只眼睛，没有脸、身体、文字。
+- 喜和乐有区别，但不是两只不同的眼睛。
+- 怒有力度但不恐怖；哀低落但无泪流、无人脸。
+- 眨眼是自然弧形眼皮，不是矩形黑条。
+- 缩到 240×240 后仍然清楚。

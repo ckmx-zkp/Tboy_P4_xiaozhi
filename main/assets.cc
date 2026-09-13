@@ -135,31 +135,60 @@ bool Assets::LvglStrategy::InitializePartition(Assets* assets) {
         return false;
     }
 
+    const size_t page_size = 64 * 1024;
     int free_pages = spi_flash_mmap_get_free_pages(SPI_FLASH_MMAP_DATA);
-    uint32_t storage_size = free_pages * 64 * 1024;
+    uint32_t storage_size = free_pages * page_size;
     ESP_LOGI(TAG, "The storage free size is %ld KB", storage_size / 1024);
     ESP_LOGI(TAG, "The partition size is %ld KB", assets->partition_->size / 1024);
-    if (storage_size < assets->partition_->size) {
-        ESP_LOGE(TAG, "The free size %ld KB is less than assets partition required %ld KB", storage_size / 1024, assets->partition_->size / 1024);
+    if (storage_size < page_size) {
+        ESP_LOGE(TAG, "No free mmap pages for assets");
         return false;
     }
 
-    esp_err_t err = esp_partition_mmap(assets->partition_, 0, assets->partition_->size, ESP_PARTITION_MMAP_DATA, (const void**)&mmap_root_, &mmap_handle_);
+    // S3 MMU 页不够映射整块 16MB assets，先读头部得到实际长度再按需映射
+    esp_err_t err = esp_partition_mmap(assets->partition_, 0, page_size, ESP_PARTITION_MMAP_DATA,
+                                       (const void**)&mmap_root_, &mmap_handle_);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to mmap assets header: %s", esp_err_to_name(err));
+        return false;
+    }
+
+    uint32_t stored_len = *(uint32_t*)(mmap_root_ + 8);
+    UnApplyPartition(assets);
+
+    if (stored_len > assets->partition_->size - 12) {
+        ESP_LOGE(TAG, "The stored_len (0x%lx) is greater than the partition size (0x%lx) - 12", stored_len, assets->partition_->size);
+        return false;
+    }
+
+    size_t mmap_size = stored_len + 12;
+    mmap_size = (mmap_size + page_size - 1) & ~(page_size - 1);
+    if (mmap_size > assets->partition_->size) {
+        mmap_size = assets->partition_->size;
+    }
+    if (mmap_size > storage_size) {
+        ESP_LOGE(TAG, "The assets content %u KB exceeds mmap free size %ld KB",
+                 static_cast<unsigned>(mmap_size / 1024), storage_size / 1024);
+        return false;
+    }
+    if (mmap_size < assets->partition_->size) {
+        ESP_LOGI(TAG, "MMAP assets %u KB of %ld KB partition",
+                 static_cast<unsigned>(mmap_size / 1024), assets->partition_->size / 1024);
+    }
+
+    err = esp_partition_mmap(assets->partition_, 0, mmap_size, ESP_PARTITION_MMAP_DATA,
+                             (const void**)&mmap_root_, &mmap_handle_);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to mmap assets partition: %s", esp_err_to_name(err));
         return false;
     }
 
+    mmap_size_ = mmap_size;
     assets->partition_valid_ = true;
 
     uint32_t stored_files = *(uint32_t*)(mmap_root_ + 0);
     uint32_t stored_chksum = *(uint32_t*)(mmap_root_ + 4);
-    uint32_t stored_len = *(uint32_t*)(mmap_root_ + 8);
-
-    if (stored_len > assets->partition_->size - 12) {
-        ESP_LOGD(TAG, "The stored_len (0x%lx) is greater than the partition size (0x%lx) - 12", stored_len, assets->partition_->size);
-        return false;
-    }
+    stored_len = *(uint32_t*)(mmap_root_ + 8);
 
     auto start_time = esp_timer_get_time();
     uint32_t calculated_checksum = CalculateChecksum(mmap_root_ + 12, stored_len);
@@ -189,6 +218,7 @@ void Assets::LvglStrategy::UnApplyPartition(Assets* assets) {
         esp_partition_munmap(mmap_handle_);
         mmap_handle_ = 0;
         mmap_root_ = nullptr;
+        mmap_size_ = 0;
     }
     checksum_valid_ = false;
     assets_.clear();
@@ -198,6 +228,10 @@ void Assets::LvglStrategy::UnApplyPartition(Assets* assets) {
 bool Assets::LvglStrategy::GetAssetData(Assets* assets, const std::string& name, void*& ptr, size_t& size) {
     auto asset = assets_.find(name);
     if (asset == assets_.end()) {
+        return false;
+    }
+    if (mmap_root_ == nullptr || asset->second.offset + 2 > mmap_size_) {
+        ESP_LOGE(TAG, "The asset %s is outside the mmap window", name.c_str());
         return false;
     }
     auto data = (const char*)(mmap_root_ + asset->second.offset);

@@ -1,0 +1,36 @@
+#ifndef _GC9107_BOE_099_INIT_H_
+#define _GC9107_BOE_099_INIT_H_
+
+#include <esp_lcd_gc9a01.h>
+
+// XJ0.99TFT-12P / BOE 0.99" IPS 厂方初始化
+// 来源：hardware/XJ0.99TFT-12P/GC9107_BOE.99_IPS(1)(1).txt
+// 不要套用 magiclick 等其它 GC9107 128×128 序列。
+static const gc9a01_lcd_init_cmd_t kGc9107Boe099InitCmds[] = {
+    {0xFE, (uint8_t[]){0x00}, 0, 0},
+    {0xEF, (uint8_t[]){0x00}, 0, 0},
+    {0xB0, (uint8_t[]){0xC0}, 1, 0},
+    {0xB2, (uint8_t[]){0x2F}, 1, 0},
+    {0xB3, (uint8_t[]){0x03}, 1, 0},
+    {0xB7, (uint8_t[]){0x01}, 1, 0},
+    {0xB6, (uint8_t[]){0x19}, 1, 0},
+    {0xAC, (uint8_t[]){0xDB}, 1, 0},
+    {0xAB, (uint8_t[]){0x0F}, 1, 0},
+    {0x3A, (uint8_t[]){0x05}, 1, 0},  // RGB565
+    {0xB4, (uint8_t[]){0x04}, 1, 0},
+    {0xA8, (uint8_t[]){0x08}, 1, 0},
+    {0xB8, (uint8_t[]){0x08}, 1, 0},
+    {0xEA, (uint8_t[]){0x94}, 1, 0},
+    {0xE8, (uint8_t[]){0x22}, 1, 0},
+    {0xE9, (uint8_t[]){0x43}, 1, 0},
+    {0xC6, (uint8_t[]){0x21}, 1, 0},
+    {0xC7, (uint8_t[]){0x12}, 1, 0},
+    {0xF0, (uint8_t[]){0x1D, 0x45, 0x0A, 0x54, 0xB4, 0x2F, 0x35,
+                      0x52, 0x1E, 0x0E, 0x08, 0x18, 0x1A, 0x1F}, 14, 0},
+    {0xF1, (uint8_t[]){0x16, 0x38, 0x1A, 0x56, 0x97, 0x2D, 0x2E,
+                      0x56, 0x10, 0x07, 0x06, 0x16, 0x12, 0x1E}, 14, 0},
+    {0x11, (uint8_t[]){0x00}, 0, 120},
+    {0x29, (uint8_t[]){0x00}, 0, 120},
+};
+
+#endif  // _GC9107_BOE_099_INIT_H_

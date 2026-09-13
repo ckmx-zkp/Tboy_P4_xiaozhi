@@ -1,0 +1,19 @@
+{
+    "target": "esp32s3",
+    "builds": [
+        {
+            "name": "esp32-s3-usb-cam",
+            "sdkconfig_append": [
+                "CONFIG_BOARD_TYPE_AIPET_ESP32_S3_USB_CAM=y",
+                "CONFIG_USE_WECHAT_MESSAGE_STYLE=n",
+                "CONFIG_USE_DEVICE_AEC=y",
+                "CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y",
+                "CONFIG_SPIRAM=y",
+                "CONFIG_SPIRAM_MODE_OCT=y",
+                "CONFIG_SPIRAM_SPEED_80M=y",
+                "CONFIG_USJ_ENABLE_USB_SERIAL_JTAG=n",
+                "CONFIG_ESP_CONSOLE_SECONDARY_NONE=y"
+            ]
+        }
+    ]
+}

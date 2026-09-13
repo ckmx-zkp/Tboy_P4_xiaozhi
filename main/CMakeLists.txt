@@ -874,6 +874,26 @@ elseif(CONFIG_BOARD_TYPE_AI_VOX3)
     set(BUILTIN_TEXT_FONT font_puhui_basic_20_4)
     set(BUILTIN_ICON_FONT font_awesome_20_4)
     set(DEFAULT_EMOJI_COLLECTION twemoji_64)
+elseif(CONFIG_BOARD_TYPE_AIPET_ESP32_S3_USB_CAM)
+    set(MANUFACTURER "aipet")
+    set(BOARD_TYPE "esp32-s3-usb-cam")
+    set(BOARD_NAME "esp32-s3-usb-cam")
+    set(BUILTIN_TEXT_FONT font_puhui_basic_20_4)
+    set(BUILTIN_ICON_FONT font_awesome_20_4)
+    set(DEFAULT_EMOJI_COLLECTION twemoji_64)
+    file(GLOB BOARD_EMBED_FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/aipet/esp32-s3-usb-cam/assets/eye_master.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/aipet/esp32-s3-usb-cam/assets/eye_happy.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/aipet/esp32-s3-usb-cam/assets/eye_angry.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/aipet/esp32-s3-usb-cam/assets/eye_sad.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/aipet/esp32-s3-usb-cam/assets/eye_joy.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/aipet/esp32-s3-usb-cam/assets/eye_blink_30.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/aipet/esp32-s3-usb-cam/assets/eye_blink_70.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/aipet/esp32-s3-usb-cam/assets/eye_blink_closed.bin
+        ${CMAKE_CURRENT_SOURCE_DIR}/boards/aipet/esp32-s3-usb-cam/assets/eye_closed.bin
+    )
+    list(LENGTH BOARD_EMBED_FILES _s3_eye_n)
+    message(STATUS "S3 USB-cam eye embed frames: ${_s3_eye_n}")
 endif()
 
 if(MANUFACTURER)
@@ -1053,6 +1073,12 @@ if(CONFIG_BOARD_TYPE_ESP_VOCAT)
         espressif__touch_button_sensor
     )
 endif()
+if(CONFIG_BOARD_TYPE_AIPET_ESP32_S3_USB_CAM)
+    list(APPEND MAIN_PRIV_REQUIRES_EXTRA
+        usb
+        espressif__usb_host_uvc
+    )
+endif()
 
 idf_component_register(SRCS ${SOURCES}
                     EMBED_FILES ${LANG_SOUNDS} ${COMMON_SOUNDS} ${BOARD_EMBED_FILES}
@@ -1090,10 +1116,16 @@ target_compile_definitions(${COMPONENT_LIB}
                     PRIVATE BUILTIN_TEXT_FONT=${BUILTIN_TEXT_FONT} BUILTIN_ICON_FONT=${BUILTIN_ICON_FONT}
                     )
 
+# Windows ninja 走 cmd.exe，裸 `python` 经常不在 PATH；用 IDF 解释器
+idf_build_get_property(python PYTHON)
+if(NOT python)
+    set(python python)
+endif()
+
 # Add generation rules
 add_custom_command(
     OUTPUT ${LANG_HEADER}
-    COMMAND python ${PROJECT_DIR}/scripts/gen_lang.py
+    COMMAND ${python} ${PROJECT_DIR}/scripts/gen_lang.py
             --language "${LANG_DIR}"
             --output "${LANG_HEADER}"
     DEPENDS
@@ -1159,6 +1191,10 @@ endif()
 
 # Function to build default assets based on configuration
 function(build_default_assets_bin)
+    idf_build_get_property(python PYTHON)
+    if(NOT python)
+        set(python python)
+    endif()
     # Set output path for generated assets.bin
     set(GENERATED_ASSETS_BIN "${CMAKE_BINARY_DIR}/generated_assets.bin")
 
@@ -1189,7 +1225,7 @@ function(build_default_assets_bin)
     # Create custom command to build assets
     add_custom_command(
         OUTPUT ${GENERATED_ASSETS_BIN}
-        COMMAND python ${PROJECT_DIR}/scripts/build_default_assets.py ${BUILD_ARGS}
+        COMMAND ${python} ${PROJECT_DIR}/scripts/build_default_assets.py ${BUILD_ARGS}
         DEPENDS
             ${SDKCONFIG}
             ${PROJECT_DIR}/scripts/build_default_assets.py
