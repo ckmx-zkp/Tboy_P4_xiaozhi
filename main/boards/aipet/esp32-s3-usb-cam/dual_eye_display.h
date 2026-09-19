@@ -18,9 +18,11 @@ public:
 
     void SetEmotion(const char* emotion);
     void SetGaze(const char* dir);
+    void SetGazeNorm(float nx, float ny);
     void BlinkOnce();
     void SetClosed(bool closed);
     void SetAutoIdle(bool on);
+    void SetBlinkProfile(int interval_ms);
     std::string GetState();
 
 private:
@@ -63,6 +65,9 @@ private:
     bool blink_request_ = false;
     bool closed_ = false;
     bool auto_idle_ = true;
+    int blink_interval_ms_ = 2500;
+    int64_t gaze_lock_us_ = 0;
+    int64_t last_emotion_us_ = 0;
 };
 
 #endif  // _DUAL_EYE_DISPLAY_H_

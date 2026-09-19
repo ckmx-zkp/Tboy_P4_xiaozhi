@@ -2,12 +2,14 @@
 #define _S3_USB_CAM_EYE_CONTROLLER_H_
 
 #include "dual_eye_display.h"
+#include "led_mood_controller.h"
 #include "mcp_server.h"
 
-// 只驱动双眼屏幕。灯色是 self.led.*，不要在这里改 WS2812。
+// 换情时双眼和 WS2812 一起变。记忆不在本机：云端 default_emotion / 话术都走本工具。
 class EyeController {
 public:
-    explicit EyeController(DualEyeDisplay* display) : display_(display) {
+    EyeController(DualEyeDisplay* display, LedMoodController* leds)
+        : display_(display), leds_(leds) {
         if (display_ == nullptr) {
             return;
         }
@@ -52,19 +54,33 @@ public:
 
         mcp.AddTool(
             "self.eye.set_emotion",
-            "只切换双眼表情（右眼原图，左眼水平镜像），绝不改 WS2812。"
+            "切换双眼表情，并同步两颗 WS2812 为同一心情色（P1 同轮联动）。"
             "用户说开心、高兴、生气、难过、兴奋、恢复正常、换表情时必须立刻调用。"
-            "若用户同时要灯变色或说心情/氛围，同一轮再调用 self.led.set_emotion，不要用本工具改灯。"
-            "emotion：neutral/happy/angry/sad/joy。",
+            "同一轮不必再调 self.led.set_emotion，除非只要灯不要换脸。"
+            "emotion：neutral/happy/angry/sad/joy。云端人设 default_emotion 也走本工具。",
             PropertyList({Property("emotion", kPropertyTypeString, "neutral")}),
             [this](const PropertyList& properties) -> ReturnValue {
-                display_->SetEmotion(properties["emotion"].value<std::string>().c_str());
+                const auto emo = properties["emotion"].value<std::string>();
+                display_->SetEmotion(emo.c_str());
+                if (leds_ != nullptr) {
+                    leds_->ApplyEmotion(emo);
+                }
+                return display_->GetState();
+            });
+
+        mcp.AddTool(
+            "self.eye.set_blink_profile",
+            "设置自动眨眼间隔（毫秒）。云端 persona blink_profile 可下发。"
+            "interval_ms：800–8000，说话时固件仍会再加快。",
+            PropertyList({Property("interval_ms", kPropertyTypeInteger, 2500, 800, 8000)}),
+            [this](const PropertyList& properties) -> ReturnValue {
+                display_->SetBlinkProfile(properties["interval_ms"].value<int>());
                 return display_->GetState();
             });
 
         mcp.AddTool(
             "self.eye.get_state",
-            "查询当前眼睛情绪、视线、是否闭眼。不改灯。",
+            "查询当前眼睛情绪、视线、是否闭眼。",
             PropertyList(),
             [this](const PropertyList&) -> ReturnValue {
                 return display_->GetState();
@@ -73,6 +89,7 @@ public:
 
 private:
     DualEyeDisplay* display_ = nullptr;
+    LedMoodController* leds_ = nullptr;
 };
 
 #endif  // _S3_USB_CAM_EYE_CONTROLLER_H_

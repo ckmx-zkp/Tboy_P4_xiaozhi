@@ -2,6 +2,8 @@
 #define _BOARD_CONFIG_H_
 
 #include <driver/gpio.h>
+#include <driver/ledc.h>
+#include <driver/uart.h>
 
 // AI Pet ESP32-S3 USB 摄像头大板
 // 原理图：D:/User/SCH_USB摄像头大板_2026-09-13.pdf
@@ -68,13 +70,39 @@
 #define WS2812_DIN_GPIO          GPIO_NUM_3
 #define WS2812_EN_GPIO           GPIO_NUM_15  // LED_EN，高电平给灯带供电
 #define WS2812_LED_COUNT         2
-#define SERVO_PWM_GPIO           GPIO_NUM_8   // SE_PWMO / CN2
+// 原理图仅一路舵机 CN2（PH 3P）：1=GND，2=SE_PWMO=GPIO8，3=5V 经 D5。
+// 型号 MG90S：50Hz，脉宽约 0.5–2.5ms 对应 0–180°。背光占用 LEDC T0/CH0，舵机用 T1/CH1。
+#define SERVO_PWM_GPIO           GPIO_NUM_8
+#define SERVO_LEDC_TIMER         LEDC_TIMER_1
+#define SERVO_LEDC_CHANNEL       LEDC_CHANNEL_1
+#define SERVO_PWM_HZ             50
+#define SERVO_LEDC_RES           LEDC_TIMER_13_BIT
+#define SERVO_MIN_PULSE_US       500
+#define SERVO_MAX_PULSE_US       2500
+#define SERVO_PERIOD_US          20000
+#define SERVO_MIN_DEG            0
+#define SERVO_MAX_DEG            180
+#define SERVO_CENTER_DEG         90
+#define SERVO_TRACK_SPAN_DEG     45    // 跟随限幅：中位 ±45°
+#define SERVO_PAN_INVERT         0     // 1=人脸在左时舵机反转
+#define SERVO_SLEW_DEG_PER_S     80
+#define SERVO_FACE_LOST_MS       800
+#define SERVO_DEADZONE           0.08f
 
-#define K230_UART_TX_GPIO        GPIO_NUM_10  // S3 U1TXD → K230 GPIO45 RX
-#define K230_UART_RX_GPIO        GPIO_NUM_11  // S3 U1RXD → K230 GPIO44 TX
-#define ML307_UART_TX_GPIO       GPIO_NUM_48  // S3 TX → 网表 4G_UART0_RXD（ML307 RX）；原理图标 1.8V?
-#define ML307_UART_RX_GPIO       GPIO_NUM_47  // S3 RX ← 网表 4G_UART0_TXD（ML307 TX）
-#define ML307_PWR_GPIO           GPIO_NUM_18  // 4G_PWR，未确认电平时保持低
+// UART0：U0TXD/U0RXD → CH340K，调试口，IDF 控制台已开。
+// UART1：IO10_U1TXD / IO11_U1RXD → K230 GPIO45 RX / GPIO44 TX（M1.131 / M1.130）。
+// UART2：IO48_U2TXD / IO47_U2RXD → ML307 UART0 RX/TX，无电平转换；原理图仍标 1.8V?。
+#define K230_UART_NUM            UART_NUM_1
+#define K230_UART_TX_GPIO        GPIO_NUM_10
+#define K230_UART_RX_GPIO        GPIO_NUM_11
+#define K230_UART_BAUD           115200
+#define ML307_UART_NUM           UART_NUM_2
+#define ML307_UART_TX_GPIO       GPIO_NUM_48  // S3 TX → 4G_UART0_RXD → U28.17
+#define ML307_UART_RX_GPIO       GPIO_NUM_47  // S3 RX ← 4G_UART0_TXD ← U28.18
+#define ML307_UART_BAUD          115200
+// 4G_PWR → TPS562200 EN（U14.5），R66 1M 下拉。高电平出 +4V VBAT。
+// ML307 PWR_ON/OFF 经 R56 4.7k 接地，上电后应自动开机，S3 无需再脉冲。
+#define ML307_PWR_GPIO           GPIO_NUM_18
 
 #define USB_DMINUS_GPIO          GPIO_NUM_19
 #define USB_DPLUS_GPIO           GPIO_NUM_20

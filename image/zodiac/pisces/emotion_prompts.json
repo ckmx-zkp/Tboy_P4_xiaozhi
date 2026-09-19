@@ -1,0 +1,55 @@
+{
+  "工具": "内置 image_gen",
+  "说明": "每张均独立引用本目录 eye_master.png 编辑；保留主眼原图。",
+  "images": [
+    {
+      "sign": "pisces",
+      "name": "eye_happy",
+      "label": "喜",
+      "prompt": "Use case: precise-object-edit. Input image is the exact edit target: the approved master eye for this zodiac. Produce ONE complete single-eye frame, not a sheet. Preserve its exact iris colors and nebula pattern, centered round pupil, tiny pupil light core, iris radius, circular boundary, camera, square canvas, scale, and upper-left pair of white reflections. Do not redesign or move the eye. Change ONLY the eyelid/expression as specified. Eyelids are smooth curved near-black surfaces with a subtle rim in the iris color, no skin, eyelashes, eyebrows, face, second eye, text, icons, watermark, or objects. Keep original canvas size if possible. Entire background must be opaque pure black #000000, including outside the circle: no transparent pixels and no outer glow. Designed for small 108x108 / 240x240 RGB565 pet screens; clean readable shapes. Gentle happy expression: lift the lower eyelid into a soft smiling curve covering the bottom 20 percent of the iris. Upper eyelid remains almost open. Keep pupil center fixed and mostly visible. Warm friendly restrained smile, not exuberant.",
+      "reference": "D:/Home_Work/ESP32_XIAOZHI/xiaozhi-esp32/image/zodiac/pisces/eye_master.png"
+    },
+    {
+      "sign": "pisces",
+      "name": "eye_angry",
+      "label": "怒",
+      "prompt": "Use case: precise-object-edit. Input image is the exact edit target: the approved master eye for this zodiac. Produce ONE complete single-eye frame, not a sheet. Preserve its exact iris colors and nebula pattern, centered round pupil, tiny pupil light core, iris radius, circular boundary, camera, square canvas, scale, and upper-left pair of white reflections. Do not redesign or move the eye. Change ONLY the eyelid/expression as specified. Eyelids are smooth curved near-black surfaces with a subtle rim in the iris color, no skin, eyelashes, eyebrows, face, second eye, text, icons, watermark, or objects. Keep original canvas size if possible. Entire background must be opaque pure black #000000, including outside the circle: no transparent pixels and no outer glow. Designed for small 108x108 / 240x240 RGB565 pet screens; clean readable shapes. Cute but clearly angry expression: upper eyelid slopes diagonally down from image right to image left (inner corner for this right-eye asset), covering about top 35 percent. Firm curved lid, determined squint, visible stationary pupil. Do not recolor the iris red, no fire or scary imagery.",
+      "reference": "D:/Home_Work/ESP32_XIAOZHI/xiaozhi-esp32/image/zodiac/pisces/eye_master.png"
+    },
+    {
+      "sign": "pisces",
+      "name": "eye_sad",
+      "label": "哀",
+      "prompt": "Use case: precise-object-edit. Input image is the exact edit target: the approved master eye for this zodiac. Produce ONE complete single-eye frame, not a sheet. Preserve its exact iris colors and nebula pattern, centered round pupil, tiny pupil light core, iris radius, circular boundary, camera, square canvas, scale, and upper-left pair of white reflections. Do not redesign or move the eye. Change ONLY the eyelid/expression as specified. Eyelids are smooth curved near-black surfaces with a subtle rim in the iris color, no skin, eyelashes, eyebrows, face, second eye, text, icons, watermark, or objects. Keep original canvas size if possible. Entire background must be opaque pure black #000000, including outside the circle: no transparent pixels and no outer glow. Designed for small 108x108 / 240x240 RGB565 pet screens; clean readable shapes. Sad tender expression: upper lid slopes gently downward from image left to image right, making the outer corner droop, covering about 30 percent. Lower lid nearly unchanged. Stationary pupil visible. No tears, no eyebrow, no separate marks.",
+      "reference": "D:/Home_Work/ESP32_XIAOZHI/xiaozhi-esp32/image/zodiac/pisces/eye_master.png"
+    },
+    {
+      "sign": "pisces",
+      "name": "eye_joy",
+      "label": "乐",
+      "prompt": "Use case: precise-object-edit. Input image is the exact edit target: the approved master eye for this zodiac. Produce ONE complete single-eye frame, not a sheet. Preserve its exact iris colors and nebula pattern, centered round pupil, tiny pupil light core, iris radius, circular boundary, camera, square canvas, scale, and upper-left pair of white reflections. Do not redesign or move the eye. Change ONLY the eyelid/expression as specified. Eyelids are smooth curved near-black surfaces with a subtle rim in the iris color, no skin, eyelashes, eyebrows, face, second eye, text, icons, watermark, or objects. Keep original canvas size if possible. Entire background must be opaque pure black #000000, including outside the circle: no transparent pixels and no outer glow. Designed for small 108x108 / 240x240 RGB565 pet screens; clean readable shapes. Exuberant joyful smiling eye, distinct from gentle happy: lower lid rises into a broad upward arched curve covering lower 40 percent, top lid subtly lifted. Stationary pupil partly visible; brighten iris slightly within SAME palette. No stars, hearts or extra shapes.",
+      "reference": "D:/Home_Work/ESP32_XIAOZHI/xiaozhi-esp32/image/zodiac/pisces/eye_master.png"
+    },
+    {
+      "sign": "pisces",
+      "name": "eye_blink_30",
+      "label": "眨眼闭合30%",
+      "prompt": "Use case: precise-object-edit. Input image is the exact edit target: the approved master eye for this zodiac. Produce ONE complete single-eye frame, not a sheet. Preserve its exact iris colors and nebula pattern, centered round pupil, tiny pupil light core, iris radius, circular boundary, camera, square canvas, scale, and upper-left pair of white reflections. Do not redesign or move the eye. Change ONLY the eyelid/expression as specified. Eyelids are smooth curved near-black surfaces with a subtle rim in the iris color, no skin, eyelashes, eyebrows, face, second eye, text, icons, watermark, or objects. Keep original canvas size if possible. Entire background must be opaque pure black #000000, including outside the circle: no transparent pixels and no outer glow. Designed for small 108x108 / 240x240 RGB565 pet screens; clean readable shapes. Blink keyframe: a smooth curved upper eyelid descends to occlude 30 percent of the original eye height from the top. Rest of original iris and pupil stay stationary and unchanged. Do not shrink, vertically compress or move the underlying eye.",
+      "reference": "D:/Home_Work/ESP32_XIAOZHI/xiaozhi-esp32/image/zodiac/pisces/eye_master.png"
+    },
+    {
+      "sign": "pisces",
+      "name": "eye_blink_70",
+      "label": "眨眼闭合70%",
+      "prompt": "Use case: precise-object-edit. Input image is the exact edit target: the approved master eye for this zodiac. Produce ONE complete single-eye frame, not a sheet. Preserve its exact iris colors and nebula pattern, centered round pupil, tiny pupil light core, iris radius, circular boundary, camera, square canvas, scale, and upper-left pair of white reflections. Do not redesign or move the eye. Change ONLY the eyelid/expression as specified. Eyelids are smooth curved near-black surfaces with a subtle rim in the iris color, no skin, eyelashes, eyebrows, face, second eye, text, icons, watermark, or objects. Keep original canvas size if possible. Entire background must be opaque pure black #000000, including outside the circle: no transparent pixels and no outer glow. Designed for small 108x108 / 240x240 RGB565 pet screens; clean readable shapes. Blink keyframe: a smooth curved upper eyelid descends to occlude 70 percent of the original eye height. Small lower lid rise allowed. Only the bottom band of iris remains visible; pupil is mostly hidden. Do not shrink, vertically compress or move the underlying eye.",
+      "reference": "D:/Home_Work/ESP32_XIAOZHI/xiaozhi-esp32/image/zodiac/pisces/eye_master.png"
+    },
+    {
+      "sign": "pisces",
+      "name": "eye_blink_closed",
+      "label": "眨眼接近闭合",
+      "prompt": "Use case: precise-object-edit. Input image is the exact edit target: the approved master eye for this zodiac. Produce ONE complete single-eye frame, not a sheet. Preserve its exact iris colors and nebula pattern, centered round pupil, tiny pupil light core, iris radius, circular boundary, camera, square canvas, scale, and upper-left pair of white reflections. Do not redesign or move the eye. Change ONLY the eyelid/expression as specified. Eyelids are smooth curved near-black surfaces with a subtle rim in the iris color, no skin, eyelashes, eyebrows, face, second eye, text, icons, watermark, or objects. Keep original canvas size if possible. Entire background must be opaque pure black #000000, including outside the circle: no transparent pixels and no outer glow. Designed for small 108x108 / 240x240 RGB565 pet screens; clean readable shapes. Almost closed blink keyframe: lids cover 95 percent of the eye. Only a very thin smooth curved glowing slit remains around lower-middle of original circle, in original iris color. Dark upper and lower lids blend into black background. No visible whole pupil, no new eye or separate eyebrow.",
+      "reference": "D:/Home_Work/ESP32_XIAOZHI/xiaozhi-esp32/image/zodiac/pisces/eye_master.png"
+    }
+  ]
+}

@@ -1,0 +1,194 @@
+[
+  {
+    "sign": "scorpio",
+    "file": "eye_master.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 1,
+    "sha256": "D6CDC73ECF475B9C785AB9E788BA70C8EBDE36F602D4D13E9E758003533B3275"
+  },
+  {
+    "sign": "scorpio",
+    "file": "eye_happy.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "9E03555AF412BE8DC4F6D00B59B63D7A80718BDF4FED321CE431AC12CBD3A339"
+  },
+  {
+    "sign": "scorpio",
+    "file": "eye_angry.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "48DE175A25CD5A3CC2CC5617C786DB993AB36563428631E3BB778A5041A1FDFB"
+  },
+  {
+    "sign": "scorpio",
+    "file": "eye_sad.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "EE6E2C1DDED0ED338D4F7F57004691985679106BF9F074CA48BDD594F66E16D6"
+  },
+  {
+    "sign": "scorpio",
+    "file": "eye_joy.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "A0CC324A8A6297FF2CEAEBCBFA38B8A46088BEFC8493135E0FAB940F96E626D6"
+  },
+  {
+    "sign": "scorpio",
+    "file": "eye_blink_30.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "413653A4DE61DDE4A48676E58882E058DB45D3874BB94B682E576086EBCCA62D"
+  },
+  {
+    "sign": "scorpio",
+    "file": "eye_blink_70.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "2E2870AD86365DA2DC2BE61CF6859CDB9035CC558D647B81967AE90BAB26D390"
+  },
+  {
+    "sign": "scorpio",
+    "file": "eye_blink_closed.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "EE90389618D0D273DEB76C21F5C443452BB01E129F02510C4B8722BD88B033C6"
+  },
+  {
+    "sign": "pisces",
+    "file": "eye_master.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 1,
+    "sha256": "8BFB2E4299FF9A94CF5D5666C28010255B1EFA9863D0FBA86A631C44380058E3"
+  },
+  {
+    "sign": "pisces",
+    "file": "eye_happy.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "DB3E40BC5743441CC94DC0A6C5F1B4A450B0021A24875AD8C20DB28B52583F7B"
+  },
+  {
+    "sign": "pisces",
+    "file": "eye_angry.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "86E7A011ADAAE2980459E6853F530922DC125A48E244CF1D8B459AF89596DB9D"
+  },
+  {
+    "sign": "pisces",
+    "file": "eye_sad.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "02C836C98E179BF4B857DE47E2F0E219FE681E59238AB149E0A20C5976D5C2F2"
+  },
+  {
+    "sign": "pisces",
+    "file": "eye_joy.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "5310A6409CB954D5E27DE6065C59056C5F809AA57C9BD1DB540EDA37CDCD7D28"
+  },
+  {
+    "sign": "pisces",
+    "file": "eye_blink_30.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "B6704E860E0F515DEB04C4EC8050ACCC7C0495868DC2F49C1AF179577B2D5204"
+  },
+  {
+    "sign": "pisces",
+    "file": "eye_blink_70.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "E24384B8125D41A8B55E378A1D6B84D92336094A17582EEB2796338F16A9093C"
+  },
+  {
+    "sign": "pisces",
+    "file": "eye_blink_closed.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "7946A565F3E84E55A41D1B68F95DA11547972C833F852A5FC2704E9741B04BA3"
+  },
+  {
+    "sign": "cancer",
+    "file": "eye_master.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 0,
+    "sha256": "5B632A7F1FA76E7A58CB7F8FCB610607F89971875948CBB759EB848E87071CDB"
+  },
+  {
+    "sign": "cancer",
+    "file": "eye_happy.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "B0AA9D2633D618C2D54460F456057BE88C81FC5DA4731D10D775BC3B3103070F"
+  },
+  {
+    "sign": "cancer",
+    "file": "eye_angry.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "C3DA67305CDC2CCB1B8C32929FA318078A28E8DFB3DC2EBF4985832F5F2C0EFE"
+  },
+  {
+    "sign": "cancer",
+    "file": "eye_sad.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "DF63492ED9DEDD209325FC40EFDEA59E28330D5B6C687624E67D7452B09F4BAF"
+  },
+  {
+    "sign": "cancer",
+    "file": "eye_joy.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "E4CB729DB196AA0FA67A50887EC07AF47178763B3C91E9E5636AF7906D3BBFF9"
+  },
+  {
+    "sign": "cancer",
+    "file": "eye_blink_30.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "10C8F880B94EAA57574C5BE03E052FAEEDA29CB5054B7D5379E5B4FC1A496B21"
+  },
+  {
+    "sign": "cancer",
+    "file": "eye_blink_70.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "38C22BEE3EF51D377AE4EAECF1C351AC89AAC00B0068C4958E499365FBDD62A2"
+  },
+  {
+    "sign": "cancer",
+    "file": "eye_blink_closed.png",
+    "width": 1254,
+    "height": 1254,
+    "corner_alpha": 255,
+    "sha256": "047C0CD292680353DC4BDF46D19F4638E402E7F6FB91403CA2A23E2EF43DFF4B"
+  }
+]

@@ -7,7 +7,10 @@
 #include <esp_heap_caps.h>
 #include <esp_log.h>
 #include <esp_random.h>
+#include <esp_timer.h>
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -52,6 +55,7 @@ DualEyeDisplay::DualEyeDisplay(esp_lcd_panel_handle_t left, esp_lcd_panel_handle
 
     mutex_ = xSemaphoreCreateMutex();
     running_ = true;
+    last_emotion_us_ = esp_timer_get_time();
     xTaskCreatePinnedToCore(AnimTask, "s3_eyes", 4096, this, 3, &task_, 1);
     ESP_LOGI(TAG, "dual eyes %dx%d (full GRAM) left=mirror right=original assets=%d",
              width_, height_, use_assets_ ? 1 : 0);
@@ -95,7 +99,13 @@ bool DualEyeDisplay::LoadAssets() {
     ok &= LoadFrame(eye_blink_70_bin_start, eye_blink_70_bin_end, &blink_[1]);
     ok &= LoadFrame(eye_blink_closed_bin_start, eye_blink_closed_bin_end, &blink_[2]);
     if (ok) {
-        ESP_LOGI(TAG, "C1 images loaded (right-eye assets, left mirrored at flush)");
+        uint32_t sum = 0;
+        const size_t n = fb_bytes_ / sizeof(uint16_t);
+        for (size_t i = 0; i < n; ++i) {
+            sum += frame_neutral_[i];
+        }
+        ESP_LOGI(TAG, "C1 images loaded (right-eye assets, left mirrored at flush) skin_sum=%u",
+                 (unsigned)sum);
     }
     return ok;
 }
@@ -147,15 +157,18 @@ void DualEyeDisplay::SetEmotion(const char* emotion) {
         canon = "angry";
     } else if (key == "sad" || key == "难过" || key == "伤心" || key == "哀") {
         canon = "sad";
-    } else if (key == "joy" || key == "兴奋" || key == "快乐" || key == "乐") {
+    } else if (key == "joy" || key == "joyful" || key == "excited" ||
+               key == "兴奋" || key == "快乐" || key == "乐") {
         canon = "joy";
-    } else if (key == "neutral" || key == "正常" || key == "中性" || key == "平静") {
+    } else if (key == "neutral" || key == "gentle" || key == "calm" ||
+               key == "正常" || key == "中性" || key == "平静") {
         canon = "neutral";
     }
     if (mutex_ != nullptr) {
         xSemaphoreTake(mutex_, portMAX_DELAY);
     }
     emotion_ = canon;
+    last_emotion_us_ = esp_timer_get_time();
     if (mutex_ != nullptr) {
         xSemaphoreGive(mutex_);
     }
@@ -176,15 +189,53 @@ std::string DualEyeDisplay::GetState() {
     } else if (gaze_ == Gaze::Down) {
         gaze = "down";
     }
-    char buf[160];
+    char buf[192];
     snprintf(buf, sizeof(buf),
-             "{\"emotion\":\"%s\",\"gaze\":\"%s\",\"closed\":%s,\"blinking\":%s}",
+             "{\"emotion\":\"%s\",\"gaze\":\"%s\",\"closed\":%s,\"blinking\":%s,\"blink_ms\":%d}",
              emotion_.c_str(), gaze, closed_ ? "true" : "false",
-             blink_step_ >= 0 ? "true" : "false");
+             blink_step_ >= 0 ? "true" : "false", blink_interval_ms_);
     if (mutex_ != nullptr) {
         xSemaphoreGive(mutex_);
     }
     return buf;
+}
+
+void DualEyeDisplay::SetGazeNorm(float nx, float ny) {
+    if (nx > 1.f) {
+        nx = 1.f;
+    } else if (nx < -1.f) {
+        nx = -1.f;
+    }
+    if (ny > 1.f) {
+        ny = 1.f;
+    } else if (ny < -1.f) {
+        ny = -1.f;
+    }
+    int dx = static_cast<int>(nx * kGazeShift);
+    int dy = static_cast<int>(ny * kGazeShift);
+    Gaze g = Gaze::Center;
+    if (std::fabs(nx) >= std::fabs(ny)) {
+        if (nx > 0.25f) {
+            g = Gaze::Right;
+        } else if (nx < -0.25f) {
+            g = Gaze::Left;
+        }
+    } else {
+        if (ny > 0.25f) {
+            g = Gaze::Down;
+        } else if (ny < -0.25f) {
+            g = Gaze::Up;
+        }
+    }
+    if (mutex_ != nullptr) {
+        xSemaphoreTake(mutex_, portMAX_DELAY);
+    }
+    gaze_ = g;
+    gaze_dx_ = dx;
+    gaze_dy_ = dy;
+    if (mutex_ != nullptr) {
+        xSemaphoreGive(mutex_);
+    }
 }
 
 void DualEyeDisplay::SetGaze(const char* dir) {
@@ -206,9 +257,27 @@ void DualEyeDisplay::SetGaze(const char* dir) {
     gaze_ = g;
     gaze_dx_ = dx;
     gaze_dy_ = dy;
+    gaze_lock_us_ = esp_timer_get_time() + 8000000;
     if (mutex_ != nullptr) {
         xSemaphoreGive(mutex_);
     }
+}
+
+void DualEyeDisplay::SetBlinkProfile(int interval_ms) {
+    if (interval_ms < 800) {
+        interval_ms = 800;
+    }
+    if (interval_ms > 8000) {
+        interval_ms = 8000;
+    }
+    if (mutex_ != nullptr) {
+        xSemaphoreTake(mutex_, portMAX_DELAY);
+    }
+    blink_interval_ms_ = interval_ms;
+    if (mutex_ != nullptr) {
+        xSemaphoreGive(mutex_);
+    }
+    ESP_LOGI(TAG, "blink_profile interval_ms=%d", interval_ms);
 }
 
 void DualEyeDisplay::BlinkOnce() {
@@ -286,6 +355,8 @@ void DualEyeDisplay::AnimTask(void* arg) {
 
 void DualEyeDisplay::AnimLoop() {
     float next_blink = 2.5f;
+    float next_gaze = 2.8f;
+    float gaze_back = -1.f;
     const float dt = 1.f / kFps;
     int blink_hold = 0;
     uint32_t tick = 0;
@@ -293,12 +364,22 @@ void DualEyeDisplay::AnimLoop() {
     while (running_) {
         const DeviceState state = Application::GetInstance().GetDeviceState();
         const bool is_speaking = (state == kDeviceStateSpeaking);
+        const bool is_listening = (state == kDeviceStateListening);
+        const bool is_idle = (state == kDeviceStateIdle);
+        const int64_t now = esp_timer_get_time();
 
         if (mutex_ != nullptr) {
             xSemaphoreTake(mutex_, portMAX_DELAY);
         }
         const bool closed = closed_;
         const bool auto_idle = auto_idle_;
+        const int blink_ms = blink_interval_ms_;
+        const bool gaze_locked = now < gaze_lock_us_;
+        if (is_idle && !closed && emotion_ != "neutral" &&
+            last_emotion_us_ > 0 && (now - last_emotion_us_) > 45000000) {
+            emotion_ = "neutral";
+            last_emotion_us_ = now;
+        }
         if (blink_request_ && blink_step_ < 0) {
             blink_request_ = false;
             blink_step_ = 0;
@@ -318,9 +399,10 @@ void DualEyeDisplay::AnimLoop() {
                 if (next_blink <= 0.f) {
                     blink_step_ = 0;
                     blink_hold = 0;
+                    const float base = static_cast<float>(blink_ms) / 1000.f;
                     next_blink = is_speaking
-                        ? 1.2f + (float)(esp_random() % 180) / 100.f
-                        : 2.0f + (float)(esp_random() % 300) / 100.f;
+                        ? std::max(0.8f, base * 0.45f) + (float)(esp_random() % 80) / 100.f
+                        : base + (float)(esp_random() % 160) / 100.f;
                 }
             }
             src = EmotionFrame();
@@ -331,6 +413,27 @@ void DualEyeDisplay::AnimLoop() {
                 ++blink_step_;
                 if (blink_step_ >= kBlinkSeqLen) {
                     blink_step_ = -1;
+                }
+            }
+        }
+
+        // 聆听时轻漂视线；说话停漂。MCP look 后约 8s 不抢。
+        if (auto_idle && !closed && !is_speaking && !gaze_locked && is_listening) {
+            if (gaze_back >= 0.f) {
+                gaze_back -= dt;
+                if (gaze_back <= 0.f) {
+                    gaze_back = -1.f;
+                    SetGaze("center");
+                    gaze_lock_us_ = 0;
+                    next_gaze = 2.4f + (float)(esp_random() % 180) / 100.f;
+                }
+            } else {
+                next_gaze -= dt;
+                if (next_gaze <= 0.f) {
+                    static const char* dirs[] = {"left", "right"};
+                    SetGaze(dirs[esp_random() % 2]);
+                    gaze_lock_us_ = 0;
+                    gaze_back = 0.6f + (float)(esp_random() % 50) / 100.f;
                 }
             }
         }

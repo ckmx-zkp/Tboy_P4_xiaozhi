@@ -1,0 +1,7 @@
+星座：天蝎座
+工具：内置 image_gen（imagegen 技能）
+输入：image/eye_master.png，保持原有角色结构。
+用途：第一版主眼配色设计；尚未接入固件。
+
+实际生成提示词：
+Use case: precise-object-edit. Edit the reference single electronic pet eye into a zodiac color variant. Keep identical square framing, circular silhouette, iris radius, centered round dark pupil with tiny luminous core, and exactly two white reflections at upper left. One open neutral eye only, no eyelid. Improve readability at 108x108 and 240x240: simplify tiny noisy star speckles into broad clean flowing nebula bands, smooth luminous gradients, crisp pupil edge, premium glass finish. Circle occupies 94% of square, pure #000000 outside, no glow outside circle. No face, symbols, lettering, zodiac icon, additional eyes or objects. Output one square PNG 1024x1024. Main change is color, preserve the same character. Deep plum violet shadows, rich ruby/crimson-magenta iris (dominant hue 345 degrees), restrained lavender edge light. Mysterious, focused, quietly affectionate; never scary or angry.

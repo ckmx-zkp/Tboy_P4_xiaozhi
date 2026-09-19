@@ -32,11 +32,11 @@ public:
             uint8_t val;
         };
         static const Item kItems[] = {
-            {"neutral", "neutral,normal,calm,中性,正常,平静,默认", 195, 80, 90},
+            {"neutral", "neutral,normal,calm,gentle,中性,正常,平静,默认", 195, 80, 90},
             {"happy", "happy,开心,高兴,喜,愉快,微笑", 48, 220, 170},
             {"angry", "angry,生气,愤怒,怒,发火", 0, 240, 170},
             {"sad", "sad,难过,伤心,哀,悲伤,郁闷", 220, 200, 130},
-            {"joy", "joy,兴奋,快乐,乐,狂欢,嗨", 300, 210, 180},
+            {"joy", "joy,joyful,excited,兴奋,快乐,乐,狂欢,嗨", 300, 210, 180},
         };
         for (const auto& item : kItems) {
             std::string aliases = item.aliases;
@@ -193,10 +193,9 @@ private:
 
         mcp.AddTool(
             "self.led.set_emotion",
-            "只改两颗 WS2812 颜色，绝不改眼睛。"
-            "用户说开心、生气、难过、兴奋、恢复正常、灯变色、心情/氛围灯时必须立刻调用。"
-            "若同时要换眼睛表情，同一轮再调用 self.eye.set_emotion，不要用本工具改屏。"
-            "emotion：neutral/happy/angry/sad/joy。颜色在该表情色系内随机。",
+            "只改两颗 WS2812 颜色，不改眼睛。"
+            "只要灯变色、心情灯、氛围灯时调用。换脸请用 self.eye.set_emotion（会顺带改灯）。"
+            "emotion：neutral/happy/angry/sad/joy。",
             PropertyList({Property("emotion", kPropertyTypeString, "neutral")}),
             [this](const PropertyList& properties) -> ReturnValue {
                 auto emotion = properties["emotion"].value<std::string>();
