@@ -103,6 +103,10 @@
 // 4G_PWR → TPS562200 EN（U14.5），R66 1M 下拉。高电平出 +4V VBAT。
 // ML307 PWR_ON/OFF 经 R56 4.7k 接地，上电后应自动开机，S3 无需再脉冲。
 #define ML307_PWR_GPIO           GPIO_NUM_18
+// USB 供电时模组没有 9V/VBAT，AT 探测只会空转。需要测 4G 时改为 1。
+#ifndef BOARD_ENABLE_4G_TEST
+#define BOARD_ENABLE_4G_TEST     0
+#endif
 
 #define USB_DMINUS_GPIO          GPIO_NUM_19
 #define USB_DPLUS_GPIO           GPIO_NUM_20

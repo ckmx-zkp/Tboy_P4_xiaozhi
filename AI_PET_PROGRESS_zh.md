@@ -259,3 +259,4 @@ BOX-3B 与乐鑫 ESP-BOX-3 **同一块主机**（少配件）。只保留官方 
 | 2026-09-20 | **S3 P1 真机通过（COM28）**：用户确认。开心/难过/生气同轮 DualEye+LedMood；「好了，休息吧」闭眼并 S2 断开。再唤醒仍 `closed=1`。 |
 | 2026-09-20 | **S3 星座眼**：`image/zodiac/{scorpio,pisces,cancer}` 各 8 张 1254²；已转 128×160 RGB565。固件嵌入天蝎并烧 COM28。旧资产在 `assets/legacy_backup`。 |
 | 2026-09-20 | **S3 巨蟹眼上板**：`assets/` 换为 `image/zodiac/cancer`，增量编译烧 COM28。待五表情目视。 |
+| 2026-09-20 | **关掉 4G 起板探测**：`BOARD_ENABLE_4G_TEST=0`，不开 UART2、不拉 GPIO18、不发 AT。要测时改 1。 |

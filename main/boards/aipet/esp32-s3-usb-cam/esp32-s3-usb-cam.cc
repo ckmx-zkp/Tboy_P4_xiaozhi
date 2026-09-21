@@ -211,14 +211,17 @@ private:
     }
 
     void InitializeUarts() {
-        // UART0 已是 CH340 调试口。K230 只收自动 JSON，4G 由任务主动发 AT。
+        // UART0 已是 CH340 调试口。K230 只收自动 JSON。
         OpenUart(K230_UART_NUM, K230_UART_TX_GPIO, K230_UART_RX_GPIO,
                  K230_UART_BAUD, 2048, "K230");
+#if BOARD_ENABLE_4G_TEST
         OpenUart(ML307_UART_NUM, ML307_UART_TX_GPIO, ML307_UART_RX_GPIO,
                  ML307_UART_BAUD, 1024, "ML307");
         ESP_LOGW(TAG, "ML307 UART is wired 3V3 straight through; schematic still marks 1.8V?");
+#endif
     }
 
+#if BOARD_ENABLE_4G_TEST
     void Enable4gPower() {
         gpio_config_t io = {};
         io.pin_bit_mask = 1ULL << ML307_PWR_GPIO;
@@ -301,6 +304,7 @@ private:
         }
         vTaskDelete(nullptr);
     }
+#endif  // BOARD_ENABLE_4G_TEST
 
     void InitializeServo() {
         if (!servo_.Begin(SERVO_PWM_GPIO)) {
@@ -360,7 +364,8 @@ private:
 
 public:
     Esp32S3UsbCamBoard() : boot_button_(BOOT_BUTTON_GPIO) {
-        ESP_LOGW(TAG, "S3 USB-cam: WiFi+audio+eyes+WS2812; enable UART1/UART2 + 4G_PWR");
+        ESP_LOGW(TAG, "S3 USB-cam: WiFi+audio+eyes+WS2812; UART1 K230; 4G test=%d",
+                 BOARD_ENABLE_4G_TEST);
         ESP_LOGW(TAG, "PA_EN schematic GPIO46 is input-only; codec PA pin left NC");
         camera_.StartHost();
         InitializeLedPower();
@@ -370,9 +375,11 @@ public:
         InitializeServo();
         GetBacklight()->RestoreBrightness();
         InitializeUarts();
+#if BOARD_ENABLE_4G_TEST
         Enable4gPower();
-        xTaskCreate(ListenK230Task, "k230_rx", 6144, this, 3, nullptr);
         xTaskCreate(ProbeMl307Task, "ml307_at", 4096, nullptr, 3, nullptr);
+#endif
+        xTaskCreate(ListenK230Task, "k230_rx", 6144, this, 3, nullptr);
     }
 
     Camera* GetCamera() override {
