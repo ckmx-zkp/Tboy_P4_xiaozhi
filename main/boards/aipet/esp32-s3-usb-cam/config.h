@@ -62,10 +62,21 @@
 #define DISPLAY_OFFSET_X         0
 #define DISPLAY_OFFSET_Y         0
 
-// 网表丝印 IO4/5/6_TOUCH* 实际是模组脚 5/6/7 = GPIO5/6/7
+// 网表丝印 IO4/5/6_TOUCH* = 模组脚 5/6/7 = GPIO5/6/7。
+// S3 触摸通道号等于 GPIO 号，所以是 TOUCH5/6/7，不是 TOUCH4/5/6。
+// 走电容触摸，不是 GPIO 数字输入。测完可改 0。
+#ifndef BOARD_ENABLE_TOUCH_TEST
+#define BOARD_ENABLE_TOUCH_TEST  1
+#endif
 #define TOUCH_PAD1_GPIO          GPIO_NUM_5
 #define TOUCH_PAD2_GPIO          GPIO_NUM_6
 #define TOUCH_PAD3_GPIO          GPIO_NUM_7
+#define TOUCH_PAD_THRESHOLD      0.015f
+// 每次测量的充放电次数。健康焊盘在这个次数下原始计数大约一两万。
+#define TOUCH_CHARGE_TIMES       500
+// 原始计数上限。GPIO6/7 硬件故障时计数远高于此，只忽略，不参与按键。
+// GPIO5 健康时大约一两万。超时后要 resume，否则扫描停在坏通道上。
+#define TOUCH_TIMEOUT_RAW        80000
 
 #define WS2812_DIN_GPIO          GPIO_NUM_3
 #define WS2812_EN_GPIO           GPIO_NUM_15  // LED_EN，高电平给灯带供电

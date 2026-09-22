@@ -29,6 +29,11 @@
 #include <esp_lcd_gc9a01.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#if BOARD_ENABLE_TOUCH_TEST
+#include <driver/touch_pad.h>
+#include <esp_clk_tree.h>
+#include <soc/clk_tree_defs.h>
+#endif
 
 #define TAG "Esp32S3UsbCam"
 
@@ -37,6 +42,21 @@ private:
     UvcCamera camera_;
     i2c_master_bus_handle_t i2c_bus_ = nullptr;
     Button boot_button_;
+#if BOARD_ENABLE_TOUCH_TEST
+    struct TouchPadState {
+        touch_pad_t pad;
+        const char* silk;
+        float baseline;
+        bool pressed;
+        int hits;
+    };
+    static constexpr int kTouchPadCount = 3;
+    TouchPadState touch_pads_[kTouchPadCount] = {
+        {static_cast<touch_pad_t>(TOUCH_PAD1_GPIO), "IO4_TOUCH4", 0.0f, false, 0},
+        {static_cast<touch_pad_t>(TOUCH_PAD2_GPIO), "IO5_TOUCH5", 0.0f, false, 0},
+        {static_cast<touch_pad_t>(TOUCH_PAD3_GPIO), "IO6_TOUCH6", 0.0f, false, 0},
+    };
+#endif
     CircularStrip* led_strip_ = nullptr;
     LedMoodController* led_mood_ = nullptr;
     DualEyeDisplay* eyes_ = nullptr;
@@ -106,6 +126,158 @@ private:
             app.ToggleChatState();
         });
     }
+
+#if BOARD_ENABLE_TOUCH_TEST
+    static void TouchPollTask(void* arg) {
+        static_cast<Esp32S3UsbCamBoard*>(arg)->TouchLoop();
+    }
+
+    // GPIO6/7 是硬件故障，计数钉死且不随充放电次数变化。只把 GPIO5 当有效按键。
+    // 睡眠周期仍要盖住超时时间，否则状态机停在坏通道上，GPIO5 也不再刷新。
+    static uint16_t TouchSleepCyclesForTimeout(uint32_t timeout_raw) {
+        uint32_t slow_hz = 0;
+        uint32_t fast_hz = 0;
+        esp_clk_tree_src_get_freq_hz(SOC_MOD_CLK_RTC_SLOW, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &slow_hz);
+        esp_clk_tree_src_get_freq_hz(SOC_MOD_CLK_RTC_FAST, ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &fast_hz);
+        if (slow_hz < 1000) {
+            slow_hz = 136000;
+        }
+        if (fast_hz < 1000000) {
+            fast_hz = 8000000;
+        }
+        const uint32_t meas_us = static_cast<uint32_t>((uint64_t)timeout_raw * 1000000ULL / fast_hz);
+        uint32_t sleep_cycle = static_cast<uint32_t>((uint64_t)(meas_us + 3000) * slow_hz / 1000000ULL);
+        if (sleep_cycle < 2000) {
+            sleep_cycle = 2000;
+        }
+        if (sleep_cycle > 60000) {
+            sleep_cycle = 60000;
+        }
+        ESP_LOGI(TAG, "cap-touch clocks slow=%lu fast=%lu timeout=%lu raw -> %lu us, sleep=%lu",
+                 static_cast<unsigned long>(slow_hz), static_cast<unsigned long>(fast_hz),
+                 static_cast<unsigned long>(timeout_raw), static_cast<unsigned long>(meas_us),
+                 static_cast<unsigned long>(sleep_cycle));
+        return static_cast<uint16_t>(sleep_cycle);
+    }
+
+    void TouchLoop() {
+        vTaskDelay(pdMS_TO_TICKS(400));
+        uint32_t last_raw[kTouchPadCount] = {};
+        uint32_t changes[kTouchPadCount] = {};
+        bool have_last = false;
+        int stuck_done = 0;
+        int timeout_hits = 0;
+        int log_ticks = 0;
+
+        while (true) {
+            const uint32_t intr = touch_pad_read_intr_status_mask();
+            if (intr & TOUCH_PAD_INTR_MASK_TIMEOUT) {
+                touch_pad_intr_clear(TOUCH_PAD_INTR_MASK_TIMEOUT);
+                touch_pad_timeout_resume();
+                ++timeout_hits;
+            }
+
+            const bool done = touch_pad_meas_is_done();
+            if (done) {
+                stuck_done = 0;
+            } else if (++stuck_done >= 8) {
+                // GPIO6/7 经常不给出 done。超时位没置上时也把扫描踢到下一脚，否则 GPIO5 被拖停。
+                touch_pad_timeout_resume();
+                stuck_done = 0;
+                ++timeout_hits;
+            }
+            const int cur = static_cast<int>(touch_pad_get_current_meas_channel());
+
+            uint32_t raw[kTouchPadCount] = {};
+            for (int i = 0; i < kTouchPadCount; i++) {
+                auto& pad = touch_pads_[i];
+                touch_pad_read_raw_data(pad.pad, &raw[i]);
+                if (have_last && raw[i] != last_raw[i]) {
+                    ++changes[i];
+                }
+                last_raw[i] = raw[i];
+
+                // GPIO6/7 硬件坏，计数停在超时以上，不参与按键。
+                if (raw[i] < 100 || raw[i] >= TOUCH_TIMEOUT_RAW) {
+                    pad.hits = 0;
+                    continue;
+                }
+                float value = static_cast<float>(raw[i]);
+                if (pad.baseline < 1.0f) {
+                    pad.baseline = value;
+                    continue;
+                }
+                float delta = (value - pad.baseline) / pad.baseline;
+                if (!pad.pressed) {
+                    if (delta > TOUCH_PAD_THRESHOLD) {
+                        if (++pad.hits >= 2) {
+                            pad.pressed = true;
+                            pad.hits = 0;
+                            ESP_LOGW(TAG, "touch %s GPIO%d on raw=%u base=%d delta=%.3f",
+                                     pad.silk, pad.pad, (unsigned)raw[i],
+                                     (int)pad.baseline, delta);
+                        }
+                    } else {
+                        pad.hits = 0;
+                        pad.baseline += (value - pad.baseline) * 0.02f;
+                    }
+                } else if (delta < TOUCH_PAD_THRESHOLD * 0.5f) {
+                    if (++pad.hits >= 2) {
+                        pad.pressed = false;
+                        pad.hits = 0;
+                        ESP_LOGI(TAG, "touch %s GPIO%d off raw=%u base=%d",
+                                 pad.silk, pad.pad, (unsigned)raw[i], (int)pad.baseline);
+                    }
+                } else {
+                    pad.hits = 0;
+                }
+            }
+            have_last = true;
+
+            if (++log_ticks >= 20) {
+                log_ticks = 0;
+                uint16_t sleep_rb = 0;
+                uint16_t meas_rb = 0;
+                touch_pad_get_measurement_interval(&sleep_rb);
+                touch_pad_get_charge_discharge_times(&meas_rb);
+                ESP_LOGI(TAG, "touch hw GPIO%d/%d/%d=%u/%u/%u done=%d ch=%d sleep=%u meas=%u timeout=%d chg=%u/%u/%u",
+                         TOUCH_PAD1_GPIO, TOUCH_PAD2_GPIO, TOUCH_PAD3_GPIO,
+                         (unsigned)raw[0], (unsigned)raw[1], (unsigned)raw[2],
+                         done ? 1 : 0, cur, sleep_rb, meas_rb, timeout_hits,
+                         (unsigned)changes[0], (unsigned)changes[1], (unsigned)changes[2]);
+                changes[0] = changes[1] = changes[2] = 0;
+                timeout_hits = 0;
+            }
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+    }
+
+    void InitializeCapacitiveTouch() {
+        // 不用 touch_button_sensor：它把 10ms/3 通道折成 sleep=343，坏掉的 GPIO6/7 会把扫描卡死。
+        const uint16_t sleep_cycle = TouchSleepCyclesForTimeout(TOUCH_TIMEOUT_RAW);
+        ESP_ERROR_CHECK(touch_pad_init());
+        touch_pad_set_voltage(TOUCH_HVOLT_2V7, TOUCH_LVOLT_0V5, TOUCH_HVOLT_ATTEN_0V);
+        touch_pad_set_charge_discharge_times(TOUCH_CHARGE_TIMES);
+        touch_pad_set_measurement_interval(sleep_cycle);
+        touch_pad_set_idle_channel_connect(TOUCH_PAD_CONN_GND);
+        touch_pad_timeout_set(true, TOUCH_TIMEOUT_RAW);
+        for (auto& pad : touch_pads_) {
+            touch_pad_config(pad.pad);
+        }
+        touch_pad_set_fsm_mode(TOUCH_FSM_MODE_TIMER);
+        touch_pad_fsm_start();
+
+        uint16_t sleep_rb = 0;
+        uint16_t meas_rb = 0;
+        touch_pad_get_measurement_interval(&sleep_rb);
+        touch_pad_get_charge_discharge_times(&meas_rb);
+        xTaskCreate(TouchPollTask, "touch_cap", 4096, this, 3, nullptr);
+        ESP_LOGI(TAG, "cap-touch GPIO%d/%d/%d = TOUCH%d/%d/%d thr=%.3f sleep=%u meas=%u timeout=%u",
+                 TOUCH_PAD1_GPIO, TOUCH_PAD2_GPIO, TOUCH_PAD3_GPIO,
+                 TOUCH_PAD1_GPIO, TOUCH_PAD2_GPIO, TOUCH_PAD3_GPIO,
+                 TOUCH_PAD_THRESHOLD, sleep_rb, meas_rb, (unsigned)TOUCH_TIMEOUT_RAW);
+    }
+#endif
 
     bool InitializeEyeSpi() {
         ESP_LOGI(TAG, "eye SPI SCLK=GPIO%d (FPC SCL) MOSI=GPIO%d (FPC SDA) DC=GPIO%d",
@@ -313,7 +485,7 @@ private:
         }
         follow_ = new FaceFollowController(&servo_, eyes_);
         servo_ctrl_ = new ServoController(&servo_, follow_);
-        ESP_LOGI(TAG, "MG90S auto-follow on CN2 GPIO8; MCP self.servo.*");
+        ESP_LOGI(TAG, "MG90S GPIO8; MCP self.servo.turn_left/turn_right/set_angle/center");
     }
 
     static void ListenK230Task(void* arg) {
@@ -364,13 +536,16 @@ private:
 
 public:
     Esp32S3UsbCamBoard() : boot_button_(BOOT_BUTTON_GPIO) {
-        ESP_LOGW(TAG, "S3 USB-cam: WiFi+audio+eyes+WS2812; UART1 K230; 4G test=%d",
-                 BOARD_ENABLE_4G_TEST);
+        ESP_LOGW(TAG, "S3 USB-cam: WiFi+audio+eyes+WS2812; UART1 K230; 4G test=%d touch=%d",
+                 BOARD_ENABLE_4G_TEST, BOARD_ENABLE_TOUCH_TEST);
         ESP_LOGW(TAG, "PA_EN schematic GPIO46 is input-only; codec PA pin left NC");
         camera_.StartHost();
         InitializeLedPower();
         InitializeCodecI2c();
         InitializeButtons();
+#if BOARD_ENABLE_TOUCH_TEST
+        InitializeCapacitiveTouch();
+#endif
         InitializeEyes();
         InitializeServo();
         GetBacklight()->RestoreBrightness();

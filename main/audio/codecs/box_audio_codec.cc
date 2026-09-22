@@ -1,6 +1,7 @@
 #include "box_audio_codec.h"
 
 #include <esp_log.h>
+#include <esp_timer.h>
 #include <driver/i2c_master.h>
 #include <driver/i2s_tdm.h>
 
@@ -8,10 +9,13 @@
 
 BoxAudioCodec::BoxAudioCodec(void* i2c_master_handle, int input_sample_rate, int output_sample_rate,
     gpio_num_t mclk, gpio_num_t bclk, gpio_num_t ws, gpio_num_t dout, gpio_num_t din,
-    gpio_num_t pa_pin, uint8_t es8311_addr, uint8_t es7210_addr, bool input_reference) {
+    gpio_num_t pa_pin, uint8_t es8311_addr, uint8_t es7210_addr, bool input_reference,
+    int reference_slot, bool log_loopback) {
     duplex_ = true; // 是否双工
     input_reference_ = input_reference; // 是否使用参考输入，实现回声消除
     input_channels_ = input_reference_ ? 2 : 1; // 输入通道数
+    reference_slot_ = reference_slot < 0 ? 0 : (reference_slot > 3 ? 3 : reference_slot);
+    log_loopback_ = log_loopback;
     input_sample_rate_ = input_sample_rate;
     output_sample_rate_ = output_sample_rate;
     input_gain_ = 30;
@@ -200,10 +204,17 @@ void BoxAudioCodec::EnableInput(bool enable) {
             .mclk_multiple = 0,
         };
         if (input_reference_) {
-            fs.channel_mask |= ESP_CODEC_DEV_MAKE_CHANNEL_MASK(1);
+            fs.channel_mask |= ESP_CODEC_DEV_MAKE_CHANNEL_MASK(reference_slot_);
         }
         ESP_ERROR_CHECK(esp_codec_dev_open(input_dev_, &fs));
         ESP_ERROR_CHECK(esp_codec_dev_set_in_channel_gain(input_dev_, ESP_CODEC_DEV_MAKE_CHANNEL_MASK(0), input_gain_));
+        if (input_reference_ && reference_slot_ > 0) {
+            // MIC3 是线电平回采，增益用 0 dB。麦通道仍用 input_gain_。
+            const float ref_gain = reference_slot_ >= 2 ? 0.0f : input_gain_;
+            ESP_ERROR_CHECK(esp_codec_dev_set_in_channel_gain(
+                input_dev_, ESP_CODEC_DEV_MAKE_CHANNEL_MASK(reference_slot_), ref_gain));
+            ESP_LOGI(TAG, "loopback ref slot %d gain %.0f dB", reference_slot_, ref_gain);
+        }
     } else {
         ESP_ERROR_CHECK(esp_codec_dev_close(input_dev_));
     }
@@ -235,6 +246,27 @@ void BoxAudioCodec::EnableOutput(bool enable) {
 int BoxAudioCodec::Read(int16_t* dest, int samples) {
     if (input_enabled_) {
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_codec_dev_read(input_dev_, (void*)dest, samples * sizeof(int16_t)));
+    }
+    if (log_loopback_ && input_channels_ == 2 && samples >= 2) {
+        const int frames = samples / 2;
+        for (int i = 0; i < frames; ++i) {
+            const int16_t mic = dest[i * 2];
+            const int16_t ref = dest[i * 2 + 1];
+            loop_mic_ += mic < 0 ? -mic : mic;
+            loop_ref_ += ref < 0 ? -ref : ref;
+        }
+        loop_frames_ += frames;
+        const int64_t now = esp_timer_get_time();
+        if (loop_log_us_ == 0) {
+            loop_log_us_ = now;
+        } else if (now - loop_log_us_ >= 1000000 && loop_frames_ > 0) {
+            ESP_LOGI(TAG, "loopback MIC1=%d MIC3=%d",
+                     (int)(loop_mic_ / loop_frames_), (int)(loop_ref_ / loop_frames_));
+            loop_mic_ = 0;
+            loop_ref_ = 0;
+            loop_frames_ = 0;
+            loop_log_us_ = now;
+        }
     }
     return samples;
 }

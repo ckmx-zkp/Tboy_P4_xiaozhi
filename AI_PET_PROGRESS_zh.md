@@ -260,3 +260,15 @@ BOX-3B 与乐鑫 ESP-BOX-3 **同一块主机**（少配件）。只保留官方 
 | 2026-09-20 | **S3 星座眼**：`image/zodiac/{scorpio,pisces,cancer}` 各 8 张 1254²；已转 128×160 RGB565。固件嵌入天蝎并烧 COM28。旧资产在 `assets/legacy_backup`。 |
 | 2026-09-20 | **S3 巨蟹眼上板**：`assets/` 换为 `image/zodiac/cancer`，增量编译烧 COM28。待五表情目视。 |
 | 2026-09-20 | **关掉 4G 起板探测**：`BOARD_ENABLE_4G_TEST=0`，不开 UART2、不拉 GPIO18、不发 AT。要测时改 1。 |
+| 2026-09-22 | **打开 4G 起板探测**：`BOARD_ENABLE_4G_TEST=1`，UART2 + GPIO18 + AT 多波特率探测。已烧 COM28。 |
+| 2026-09-22 | **打开 CN1 触摸**：`BOARD_ENABLE_TOUCH_TEST=1`，GPIO5/6/7（丝印 IO4/5/6）高电平按下打 `touch IOx on/off`。 |
+| 2026-09-22 | **CN1 改电容触摸**：GPIO5/6/7 走 S3 TOUCH4/5/6（`touch_button_sensor`），不再当 GPIO 高电平按键。 |
+| 2026-09-22 | **电容触摸阈值**：`TOUCH_PAD_THRESHOLD` 0.010 → 0.003，更容易触发。仅拆 R48 时只有 GPIO5 有效。 |
+| 2026-09-22 | **关掉 4G 宏**，**打开 MIC3 回采**：参考通道改为 TDM slot2，增益 0 dB。每秒日志 `loopback MIC1 MIC3`。PA_EN 仍不由软件驱动。 |
+| 2026-09-22 | **撤回 MIC3 回采**：AEC 把近乎无声的 MIC3 当参考后听不到人声。参考通道恢复 MIC2。4G 仍关。 |
+| 2026-09-22 | **电容触摸**：阈值 0.015，有效变化上限从「2×阈值」改为 0.50。每秒打 `touch raw GPIO5/6/7`。仅拆 R48 时只有 GPIO5 能摸。 |
+| 2026-09-22 | **电容触摸日志**：状态机读数被除以 100，上一版日志恒为 0。改为直接打硬件计数 `touch hw GPIO5/6/7`。 |
+| 2026-09-22 | **电容触摸扫描**：硬件计数逐秒不变=扫描定时器没走。回读采样间隔并兜底设为 1000 个 RTC 周期，日志加 `done/sleep/meas`。 |
+| 2026-09-22 | **电容触摸自研**：弃用 `touch_button_sensor` 组件（含 CMake 依赖），改为 `driver/touch_pad.h` + 自建任务 50ms 轮询，软件基线跟随 + 相对涨幅判定。 |
+| 2026-09-22 | **舵机语音 MCP**：`self.servo.turn_left` / `turn_right`（GPIO8，默认相对正中 30°）。说「向左转/向右转」应调这两条，不替代眼睛 look。 |
+| 2026-09-23 | **CN1 触摸**：弃用 `touch_button_sensor`（sleep=343 把扫描卡死，三路计数冻结、`done=0`）。自管触摸外设后 COM28 真机 GPIO5 计数约 3.3 万且随触摸变化，能打出 `touch on`。GPIO6/7 计数钉死，确认为硬件问题，软件只认 GPIO5。 |
