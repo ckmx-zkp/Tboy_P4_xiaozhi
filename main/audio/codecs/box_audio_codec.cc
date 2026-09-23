@@ -10,7 +10,7 @@
 BoxAudioCodec::BoxAudioCodec(void* i2c_master_handle, int input_sample_rate, int output_sample_rate,
     gpio_num_t mclk, gpio_num_t bclk, gpio_num_t ws, gpio_num_t dout, gpio_num_t din,
     gpio_num_t pa_pin, uint8_t es8311_addr, uint8_t es7210_addr, bool input_reference,
-    int reference_slot, bool log_loopback) {
+    bool amp_follow_pcm, int reference_slot, bool log_loopback) {
     duplex_ = true; // 是否双工
     input_reference_ = input_reference; // 是否使用参考输入，实现回声消除
     input_channels_ = input_reference_ ? 2 : 1; // 输入通道数
@@ -47,7 +47,27 @@ BoxAudioCodec::BoxAudioCodec(void* i2c_master_handle, int input_sample_rate, int
     es8311_cfg.ctrl_if = out_ctrl_if_;
     es8311_cfg.gpio_if = gpio_if_;
     es8311_cfg.codec_mode = ESP_CODEC_DEV_WORK_MODE_DAC;
-    es8311_cfg.pa_pin = pa_pin;
+    es8311_cfg.pa_pin = amp_follow_pcm ? GPIO_NUM_NC : pa_pin;
+    if (amp_follow_pcm && pa_pin != GPIO_NUM_NC) {
+        amp_pin_ = pa_pin;
+        gpio_config_t io = {};
+        io.pin_bit_mask = 1ULL << static_cast<uint32_t>(amp_pin_);
+        io.mode = GPIO_MODE_OUTPUT;
+        io.pull_up_en = GPIO_PULLUP_DISABLE;
+        io.pull_down_en = GPIO_PULLDOWN_DISABLE;
+        io.intr_type = GPIO_INTR_DISABLE;
+        ESP_ERROR_CHECK(gpio_config(&io));
+        gpio_set_level(amp_pin_, 0);
+        esp_timer_create_args_t timer_args = {};
+        timer_args.callback = [](void* arg) {
+            auto* self = static_cast<BoxAudioCodec*>(arg);
+            gpio_set_level(self->amp_pin_, 0);
+        };
+        timer_args.arg = this;
+        timer_args.dispatch_method = ESP_TIMER_TASK;
+        timer_args.name = "pa_idle";
+        ESP_ERROR_CHECK(esp_timer_create(&timer_args, &amp_timer_));
+    }
     es8311_cfg.use_mclk = true;
     es8311_cfg.hw_gain.pa_voltage = 5.0;
     es8311_cfg.hw_gain.codec_dac_voltage = 3.3;
@@ -82,6 +102,13 @@ BoxAudioCodec::BoxAudioCodec(void* i2c_master_handle, int input_sample_rate, int
 }
 
 BoxAudioCodec::~BoxAudioCodec() {
+    if (amp_timer_ != nullptr) {
+        esp_timer_stop(amp_timer_);
+        esp_timer_delete(amp_timer_);
+    }
+    if (amp_pin_ != GPIO_NUM_NC) {
+        gpio_set_level(amp_pin_, 0);
+    }
     ESP_ERROR_CHECK(esp_codec_dev_close(output_dev_));
     esp_codec_dev_delete(output_dev_);
     ESP_ERROR_CHECK(esp_codec_dev_close(input_dev_));
@@ -273,6 +300,13 @@ int BoxAudioCodec::Read(int16_t* dest, int samples) {
 
 int BoxAudioCodec::Write(const int16_t* data, int samples) {
     if (output_enabled_) {
+        if (amp_pin_ != GPIO_NUM_NC) {
+            gpio_set_level(amp_pin_, 1);
+            if (amp_timer_ != nullptr) {
+                esp_timer_stop(amp_timer_);
+                esp_timer_start_once(amp_timer_, 200 * 1000);
+            }
+        }
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_codec_dev_write(output_dev_, (void*)data, samples * sizeof(int16_t)));
     }
     return samples;

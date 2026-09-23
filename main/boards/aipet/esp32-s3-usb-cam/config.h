@@ -22,10 +22,9 @@
 #define AUDIO_I2S_GPIO_DIN  GPIO_NUM_12
 #define AUDIO_I2S_GPIO_DOUT GPIO_NUM_45
 
-// 原理图 PA_EN 接到模组脚 16 = GPIO46。ESP32-S3 的 GPIO46 为仅输入，
-// 软件拉不了 NS4150B CTRL。当前按 NC 处理，等改版飞线到 GPIO9/21。
-#define AUDIO_CODEC_PA_PIN       GPIO_NUM_NC
-#define AUDIO_CODEC_PA_PIN_SCH   GPIO_NUM_46
+// 原理图 PA_EN = 模组脚 16 = GPIO46 = NS4150B CTRL。高电平开功放。
+// GPIO46 可输出。空闲拉低，播 PCM 时拉高。不要再把该脚硬接到 3.3V。
+#define AUDIO_CODEC_PA_PIN       GPIO_NUM_46
 #define AUDIO_CODEC_I2C_SDA_PIN  GPIO_NUM_1
 #define AUDIO_CODEC_I2C_SCL_PIN  GPIO_NUM_2
 #define AUDIO_CODEC_ES8311_ADDR  ES8311_CODEC_DEFAULT_ADDR  // 7-bit 0x18
@@ -124,7 +123,6 @@
 // U4 模组横出 640×480，安装后画面横置。1=顺时针 90°，3=顺时针 270°，0=不转。
 #define CAMERA_ROTATE_90         1
 
-// 空闲脚，改版建议把 PA_EN 改到其中之一
 #define UNUSED_GPIO_9            GPIO_NUM_9
 #define UNUSED_GPIO_21           GPIO_NUM_21
 

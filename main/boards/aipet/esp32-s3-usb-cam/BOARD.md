@@ -41,7 +41,7 @@
 | 41 | IO41_LCD_SCK | 双眼 SDA（玻璃数据，网表名叫 SCK） | MOSI |
 | 42 | IO42_LCD_BL | 双眼背光（P-MOS，低电平亮） | 已接，PWM 反相 |
 | 45 | IO45_I2S_DO | ES8311 DIN | 已接 |
-| 46 | PA_EN | 原理图接 NS4150B CTRL | **不能作输出** |
+| 46 | PA_EN | 原理图接 NS4150B CTRL，高电平开 | 播放时拉高，空闲拉低 |
 | 47 | IO47_U2RXD / 4G_UART0_TXD | UART2 RX ← ML307 UART0_TXD | 关（`BOARD_ENABLE_4G_TEST=0`） |
 | 48 | IO48_U2TXD / 4G_UART0_RXD | UART2 TX → ML307 UART0_RXD | 关（`BOARD_ENABLE_4G_TEST=0`） |
 
@@ -49,7 +49,7 @@
 
 ## 硬件门禁（未关不得当量产）
 
-1. **功放使能**：`PA_EN` 在 GPIO46（仅输入），R40 下拉，NS4150B 默认关。不改版/飞线则可能无声。候选脚：GPIO9、GPIO21。
+1. **功放使能**：`PA_EN` 在 GPIO46，软件作输出。播 PCM 时拉高，空闲拉低。不要再把该脚硬接到 3.3V，否则会和输出对打。
 2. **4G UART 电平**：原理图仍标 `1.8V?`，网表是 S3 GPIO47/48 直连 ML307 UART0，中间没有转换芯片。`PWR_ON/OFF` 经 R56 4.7k 接地，给 VBAT 后应自动开机。已拉高 `4G_PWR`。真机 K230 JSON 已通，ML307 `AT` 无回包：先量 SW4 VIN 与 U14 `+4V`，再量模组 `UART0_TXD` 空闲电平（1.8V 低于 S3 Vih≈2.5V 时软件收不到）。
 3. **S3 assets mmap**：`partitions/v2/32m.csv` 的 assets 是 16MB，S3 MMU 空闲页约 14MB，整分区映射会失败并关掉唤醒词。量产固件已按实际资源长度映射，不要再整分区 mmap。
 4. **真机**：COM25 / MAC `d8:85:ac:ba:85:d8` 已配 `TP-LINK_C738` 并激活。

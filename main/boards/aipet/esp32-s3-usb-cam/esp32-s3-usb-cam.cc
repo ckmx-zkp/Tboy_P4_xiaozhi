@@ -538,7 +538,7 @@ public:
     Esp32S3UsbCamBoard() : boot_button_(BOOT_BUTTON_GPIO) {
         ESP_LOGW(TAG, "S3 USB-cam: WiFi+audio+eyes+WS2812; UART1 K230; 4G test=%d touch=%d",
                  BOARD_ENABLE_4G_TEST, BOARD_ENABLE_TOUCH_TEST);
-        ESP_LOGW(TAG, "PA_EN schematic GPIO46 is input-only; codec PA pin left NC");
+        ESP_LOGI(TAG, "PA_EN GPIO46 output: high while playing, low when idle");
         camera_.StartHost();
         InitializeLedPower();
         InitializeCodecI2c();
@@ -574,7 +574,8 @@ public:
             AUDIO_CODEC_PA_PIN,
             AUDIO_CODEC_ES8311_ADDR,
             AUDIO_CODEC_ES7210_ADDR,
-            AUDIO_INPUT_REFERENCE);
+            AUDIO_INPUT_REFERENCE,
+            true);
         return &audio_codec;
     }
 
