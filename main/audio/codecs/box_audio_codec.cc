@@ -248,6 +248,19 @@ void BoxAudioCodec::EnableInput(bool enable) {
     AudioCodec::EnableInput(enable);
 }
 
+void BoxAudioCodec::PreparePlayback() {
+    if (amp_pin_ == GPIO_NUM_NC) {
+        return;
+    }
+    gpio_set_level(amp_pin_, 1);
+    if (amp_timer_ != nullptr) {
+        esp_timer_stop(amp_timer_);
+        // NS4150B needs up to about 120 ms after CTRL rises. Keep it on until
+        // PCM arrives; Write() then holds it for 200 ms after the last sample.
+        esp_timer_start_once(amp_timer_, 1500 * 1000);
+    }
+}
+
 void BoxAudioCodec::EnableOutput(bool enable) {
     std::lock_guard<std::mutex> lock(data_if_mutex_);
     if (enable == output_enabled_) {

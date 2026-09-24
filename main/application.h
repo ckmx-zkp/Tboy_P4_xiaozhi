@@ -11,6 +11,7 @@
 #include <deque>
 #include <memory>
 #include <functional>
+#include <atomic>
 
 #include "protocol.h"
 #include "ota.h"
@@ -142,6 +143,9 @@ private:
 
     bool has_server_time_ = false;
     bool aborted_ = false;
+    // Set on the websocket task when TTS start arrives, before the main loop
+    // switches to speaking. Audio frames in that gap used to be discarded.
+    std::atomic<bool> accept_tts_audio_{false};
     bool assets_version_checked_ = false;
     bool play_popup_on_listening_ = false;  // Flag to play popup sound after state changes to listening
     int clock_ticks_ = 0;

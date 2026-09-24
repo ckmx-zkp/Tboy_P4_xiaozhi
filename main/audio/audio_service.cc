@@ -630,6 +630,12 @@ void AudioService::SetCallbacks(AudioServiceCallbacks& callbacks) {
     callbacks_ = callbacks;
 }
 
+void AudioService::PreparePlayback() {
+    if (codec_ != nullptr) {
+        codec_->PreparePlayback();
+    }
+}
+
 void AudioService::PlaySound(const std::string_view& ogg) {
     if (!codec_->output_enabled()) {
         esp_timer_stop(audio_power_timer_);
