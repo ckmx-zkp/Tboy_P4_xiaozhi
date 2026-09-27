@@ -28,6 +28,7 @@ public:
     void OnVadStateChange(std::function<void(bool speaking)> callback) override;
     size_t GetFeedSize() override;
     void EnableDeviceAec(bool enable) override;
+    void ResetBuffer() override;
 
 private:
     EventGroupHandle_t event_group_ = nullptr;

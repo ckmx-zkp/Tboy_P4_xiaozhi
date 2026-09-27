@@ -1,6 +1,22 @@
+# managed_components 不进 git。重新下载 usb_host_uvc 后补上开流失败的双重释放修复。
+if(EXISTS "${CMAKE_SOURCE_DIR}/managed_components/espressif__usb_host_uvc/uvc_host.c")
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_EXECUTABLE)
+        execute_process(
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/patch_usb_host_uvc.py"
+            RESULT_VARIABLE _uvc_patch_rc
+        )
+        if(NOT _uvc_patch_rc EQUAL 0)
+            message(WARNING "usb_host_uvc open-fail patch failed (${_uvc_patch_rc})")
+        endif()
+    endif()
+endif()
+
 # Define source files
 set(SOURCES "audio/audio_codec.cc"
             "audio/audio_service.cc"
+            "audio/music_player.cc"
+            "audio/demuxer/music_ogg_demuxer.cc"
             "audio/demuxer/ogg_demuxer.cc"
             "audio/codecs/no_audio_codec.cc"
             "audio/codecs/box_audio_codec.cc"

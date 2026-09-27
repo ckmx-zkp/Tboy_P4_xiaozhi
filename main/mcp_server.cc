@@ -104,7 +104,7 @@ void McpServer::AddCommonTools() {
             "必须立刻调用本工具，不要先说话。禁止口头说正在拍、已经拍了或相机不可用。\n"
             "Always use this tool to see. Never claim the camera is unavailable.\n"
             "Args:\n"
-            "  `question`: 要问这张照片的问题，例如：请描述照片中的人物外貌。\n"
+            "  `question`: 想确认的一件事，例如：他现在在做什么。不要要求逐项描述外貌。\n"
             "Return:\n"
             "  识图 JSON。若 success 为 false，据实转述服务端原因，不要说设备没有相机。",
             PropertyList({
@@ -113,6 +113,10 @@ void McpServer::AddCommonTools() {
             [camera](const PropertyList& properties) -> ReturnValue {
                 // Lower the priority to do the camera capture
                 TaskPriorityReset priority_reset(1);
+                // 覆盖 Capture 与 Explain 全程。任一步抛出也要把麦打开。
+                struct ResumeMic {
+                    ~ResumeMic() { Application::GetInstance().GetAudioService().SuspendVoiceInput(false); }
+                } resume_mic;
 
                 if (!camera->Capture()) {
                     throw std::runtime_error("Failed to capture photo");

@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include <esp_err.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <usb/uvc_host.h>
@@ -30,7 +31,7 @@ public:
 
 private:
     bool EnsureHost();
-    bool CaptureFormat(uint16_t w, uint16_t h, float fps);
+    bool CaptureFormat(uint16_t w, uint16_t h, float fps, int urb_count, size_t urb_size, esp_err_t* open_err);
     static bool ExtractJpeg(const uint8_t* data, size_t len, std::vector<uint8_t>& out);
     static bool ComposeBurstJpeg(const std::vector<std::vector<uint8_t>>& frames,
                                  std::vector<uint8_t>& out, uint16_t* out_w, uint16_t* out_h);

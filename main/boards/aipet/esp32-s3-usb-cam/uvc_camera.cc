@@ -1,6 +1,7 @@
 #include "uvc_camera.h"
 #include "config.h"
 
+#include "application.h"
 #include "audio_codec.h"
 #include "board.h"
 #include "system_info.h"
@@ -166,10 +167,7 @@ bool UvcCamera::ExtractJpeg(const uint8_t* data, size_t len, std::vector<uint8_t
 }
 
 void UvcCamera::PauseMic(bool pause) {
-    auto codec = Board::GetInstance().GetAudioCodec();
-    if (codec) {
-        codec->EnableInput(!pause);
-    }
+    Application::GetInstance().GetAudioService().SuspendVoiceInput(pause);
 }
 
 void UvcCamera::StripThinkTags(std::string& text) {
@@ -286,7 +284,8 @@ bool UvcCamera::ComposeBurstJpeg(const std::vector<std::vector<uint8_t>>& frames
     return true;
 }
 
-bool UvcCamera::CaptureFormat(uint16_t w, uint16_t h, float fps) {
+bool UvcCamera::CaptureFormat(uint16_t w, uint16_t h, float fps, int urb_count, size_t urb_size,
+                              esp_err_t* open_err) {
     uvc_host_stream_config_t cfg = {};
     cfg.event_cb = StreamCallback;
     cfg.frame_cb = FrameCallback;
@@ -300,15 +299,19 @@ bool UvcCamera::CaptureFormat(uint16_t w, uint16_t h, float fps) {
     cfg.vs_format.format = UVC_VS_FORMAT_MJPEG;
     cfg.advanced.frame_size = 0;
     cfg.advanced.number_of_frame_buffers = 3;
-    cfg.advanced.number_of_urbs = 3;
-    cfg.advanced.urb_size = 10 * 1024;
+    cfg.advanced.number_of_urbs = urb_count;
+    cfg.advanced.urb_size = urb_size;
     cfg.advanced.frame_heap_caps = MALLOC_CAP_SPIRAM;
 
     uvc_host_stream_hdl_t stream = nullptr;
     disconnected_ = false;
     esp_err_t err = uvc_host_stream_open(&cfg, pdMS_TO_TICKS(OPEN_WAIT_MS), &stream);
+    if (open_err) {
+        *open_err = err;
+    }
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "open %ux%u failed: %s", w, h, esp_err_to_name(err));
+        ESP_LOGW(TAG, "open %ux%u urb=%d x %u failed: %s", w, h, urb_count,
+                 static_cast<unsigned>(urb_size), esp_err_to_name(err));
         return false;
     }
 
@@ -398,6 +401,51 @@ bool UvcCamera::Capture() {
         return false;
     }
 
+    // URB 数据缓冲必须在内部 DMA。对话中这块堆经常拼不出连续 10KB，
+    // 固定 3×10KB 会在开流第一块分配上失败。按当前最大空闲块从大到小试。
+    const uint32_t dma_caps = MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL | MALLOC_CAP_CACHE_ALIGNED;
+    const size_t largest = heap_caps_get_largest_free_block(dma_caps);
+    ESP_LOGI(TAG, "usb dma free=%u largest=%u",
+             static_cast<unsigned>(heap_caps_get_free_size(dma_caps)),
+             static_cast<unsigned>(largest));
+
+    struct UrbPlan {
+        int count;
+        size_t size;
+    };
+    UrbPlan twos[5];
+    UrbPlan ones[5];
+    int ntwo = 0;
+    int none = 0;
+    const size_t kSizes[] = {8 * 1024, 4 * 1024, 3 * 1024, 2 * 1024, 1024};
+    for (size_t sz : kSizes) {
+        void* first = heap_caps_malloc(sz, dma_caps);
+        if (!first) {
+            continue;
+        }
+        void* second = heap_caps_malloc(sz, dma_caps);
+        heap_caps_free(first);
+        if (second) {
+            heap_caps_free(second);
+            twos[ntwo++] = {2, sz};
+        } else {
+            ones[none++] = {1, sz};
+        }
+    }
+    UrbPlan plans[8];
+    int nplans = 0;
+    for (int i = 0; i < ntwo; ++i) {
+        plans[nplans++] = twos[i];
+    }
+    for (int i = 0; i < none; ++i) {
+        plans[nplans++] = ones[i];
+    }
+    if (nplans == 0) {
+        ESP_LOGE(TAG, "no internal DMA for USB URB, largest=%u", static_cast<unsigned>(largest));
+        PauseMic(false);
+        return false;
+    }
+
     static const struct {
         uint16_t w;
         uint16_t h;
@@ -408,12 +456,24 @@ bool UvcCamera::Capture() {
         {320, 240, 15},
         {160, 120, 15},
     };
-    for (const auto& format : formats) {
-        if (CaptureFormat(format.w, format.h, format.fps)) {
-            ESP_LOGI(TAG, "captured %ux%u jpeg %u bytes frames=%d head=%02x%02x%02x",
-                     width_, height_, static_cast<unsigned>(jpeg_.size()), burst_count_,
-                     jpeg_[0], jpeg_[1], jpeg_[2]);
-            return true;
+    for (int p = 0; p < nplans; ++p) {
+        ESP_LOGI(TAG, "try urb %d x %u", plans[p].count, static_cast<unsigned>(plans[p].size));
+        bool no_mem = false;
+        for (const auto& format : formats) {
+            esp_err_t open_err = ESP_FAIL;
+            if (CaptureFormat(format.w, format.h, format.fps, plans[p].count, plans[p].size, &open_err)) {
+                ESP_LOGI(TAG, "captured %ux%u jpeg %u bytes frames=%d head=%02x%02x%02x",
+                         width_, height_, static_cast<unsigned>(jpeg_.size()), burst_count_,
+                         jpeg_[0], jpeg_[1], jpeg_[2]);
+                return true;
+            }
+            if (open_err == ESP_ERR_NO_MEM) {
+                no_mem = true;
+                break;
+            }
+        }
+        if (!no_mem) {
+            break;
         }
     }
     ESP_LOGE(TAG, "UVC capture failed");
@@ -450,8 +510,8 @@ std::string UvcCamera::Explain(const std::string& question) {
 
     std::string ask = question;
     if (burst_count_ > 1) {
-        ask = "这是连续" + std::to_string(burst_count_) +
-              "帧连拍，从上到下按时间排列。" + question;
+        ask = "现场是连续" + std::to_string(burst_count_) +
+              "帧，看整体在做什么就行。" + question;
     }
 
     std::string question_field;

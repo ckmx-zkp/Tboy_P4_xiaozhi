@@ -14,9 +14,9 @@
 class Pca9557 : public I2cDevice {
 public:
     Pca9557(i2c_master_bus_handle_t i2c_bus, uint8_t addr) : I2cDevice(i2c_bus, addr) {
-        // IO0..IO2 输出。IO0 是 LCD_CS，保持高。IO1 是 PA_EN，先关。
-        WriteReg(0x01, 0x01);
-        WriteReg(0x03, 0xf8);
+        // 只把 IO1（PA_EN）设成输出并拉低。LCD_CS、LCD_BL 和其余脚保持输入，不点亮屏幕。
+        WriteReg(0x01, 0x00);
+        WriteReg(0x03, 0xfd);
     }
 
     void SetOutputState(uint8_t bit, uint8_t level) {
@@ -105,7 +105,7 @@ private:
 
 public:
     Esp32S3V101Board() : boot_button_(BOOT_BUTTON_GPIO) {
-        ESP_LOGW(TAG, "S3 V1.0.1: audio only, PA_EN = PCA9557 IO1, no LCD");
+        ESP_LOGW(TAG, "S3 V1.0.1: audio only, PA_EN = PCA9557 IO1, LCD pins left idle");
         InitializeI2c();
         InitializeButtons();
     }

@@ -11,6 +11,7 @@
 #include "settings.h"
 
 #include <cstring>
+#include <stdexcept>
 #include <esp_log.h>
 #include <cJSON.h>
 #include <driver/gpio.h>
@@ -18,6 +19,84 @@
 #include <font_awesome.h>
 
 #define TAG "Application"
+
+static size_t Utf8Length(const std::string& text) {
+    size_t count = 0;
+    for (unsigned char c : text) {
+        if ((c & 0xC0) != 0x80) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+static std::string NormalizeUtterance(const std::string& raw) {
+    std::string out;
+    const auto* s = reinterpret_cast<const unsigned char*>(raw.data());
+    size_t i = 0;
+    while (i < raw.size()) {
+        uint32_t cp = s[i];
+        size_t len = 1;
+        if ((s[i] & 0x80) == 0) {
+            len = 1;
+        } else if ((s[i] & 0xE0) == 0xC0 && i + 1 < raw.size()) {
+            cp = ((s[i] & 0x1F) << 6) | (s[i + 1] & 0x3F);
+            len = 2;
+        } else if ((s[i] & 0xF0) == 0xE0 && i + 2 < raw.size()) {
+            cp = ((s[i] & 0x0F) << 12) | ((s[i + 1] & 0x3F) << 6) | (s[i + 2] & 0x3F);
+            len = 3;
+        } else if ((s[i] & 0xF8) == 0xF0 && i + 3 < raw.size()) {
+            cp = ((s[i] & 0x07) << 18) | ((s[i + 1] & 0x3F) << 12) |
+                 ((s[i + 2] & 0x3F) << 6) | (s[i + 3] & 0x3F);
+            len = 4;
+        }
+        const bool drop = cp == ' ' || cp == '\t' || cp == '\n' || cp == '\r' ||
+            (cp >= 0x21 && cp <= 0x2F) || (cp >= 0x3A && cp <= 0x40) ||
+            (cp >= 0x5B && cp <= 0x60) || (cp >= 0x7B && cp <= 0x7E) ||
+            cp == 0x3000 || cp == 0x3001 || cp == 0x3002 ||
+            (cp >= 0xFF01 && cp <= 0xFF0F) || cp == 0xFF1A || cp == 0xFF1B ||
+            cp == 0xFF1F || cp == 0xFF0C;
+        if (!drop) {
+            out.append(raw, i, len);
+        }
+        i += len;
+    }
+    return out;
+}
+
+static bool IsRestText(const std::string& raw) {
+    const std::string text = NormalizeUtterance(raw);
+    static const char* kExact[] = {
+        "休息", "休息吧", "晚安", "睡觉", "睡觉吧", "去睡觉", "睡了", "睡吧",
+        "我要休息", "我想休息", "我要睡觉", "我想睡觉", "好了休息吧",
+    };
+    for (const char* cmd : kExact) {
+        if (text == cmd) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool IsVoiceExitText(const std::string& raw) {
+    const std::string text = NormalizeUtterance(raw);
+    static const char* kExact[] = {
+        "退出", "关闭", "再见", "拜拜", "不想聊了", "结束对话", "别说了",
+        "我要退出",
+    };
+    for (const char* cmd : kExact) {
+        if (text == cmd) {
+            return true;
+        }
+    }
+    if (Utf8Length(text) <= 8 &&
+        (text.find("退出") != std::string::npos ||
+         text.find("再见") != std::string::npos ||
+         text.find("拜拜") != std::string::npos)) {
+        return true;
+    }
+    return false;
+}
 
 
 Application::Application() {
@@ -182,7 +261,8 @@ void Application::Run() {
         MAIN_EVENT_STATE_CHANGED;
 
     while (true) {
-        auto bits = xEventGroupWaitBits(event_group_, ALL_EVENTS, pdTRUE, pdFALSE, portMAX_DELAY);
+        auto bits = xEventGroupWaitBits(event_group_, ALL_EVENTS, pdTRUE, pdFALSE,
+            (music_player_.HasPending() || music_session_) ? pdMS_TO_TICKS(100) : portMAX_DELAY);
 
         if (bits & MAIN_EVENT_ERROR) {
             SetDeviceState(kDeviceStateIdle);
@@ -255,6 +335,7 @@ void Application::Run() {
                 SystemInfo::PrintHeapStats();
             }
         }
+        PollMusic();
     }
 }
 
@@ -284,6 +365,7 @@ void Application::HandleNetworkConnectedEvent() {
 }
 
 void Application::HandleNetworkDisconnectedEvent() {
+    StopMusic();
     // Close current conversation when network disconnected
     auto state = GetDeviceState();
     if (state == kDeviceStateConnecting || state == kDeviceStateListening || state == kDeviceStateSpeaking) {
@@ -523,7 +605,11 @@ void Application::InitializeProtocol() {
     protocol_->OnAudioChannelClosed([this, &board]() {
         board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
         accept_tts_audio_.store(false);
+        voice_exit_.store(false);
+        rest_after_reply_.store(false);
         Schedule([this]() {
+            StopMusic();
+            music_tts_barrier_ = false;
             auto display = Board::GetInstance().GetDisplay();
             display->SetChatMessage("system", "");
             SetDeviceState(kDeviceStateIdle);
@@ -535,20 +621,48 @@ void Application::InitializeProtocol() {
         auto type = cJSON_GetObjectItem(root, "type");
         if (strcmp(type->valuestring, "tts") == 0) {
             auto state = cJSON_GetObjectItem(root, "state");
-            if (strcmp(state->valuestring, "start") == 0) {
+            if (strcmp(state->valuestring, "start") == 0 && !voice_exit_.load()) {
                 // Clear stale PCM, then accept frames on this task. The speaking
                 // state is applied later on the main loop; waiting for it dropped
                 // the whole utterance and left NS4150B shut down.
+                // 音乐与 TTS 共用输出队列；先使音乐轮次失效，再接收 TTS。
+                std::lock_guard<std::mutex> transition_lock(music_transition_mutex_);
+                if (music_player_.IsActive()) {
+                    music_player_.Stop();
+                }
                 audio_service_.ResetDecoder();
                 accept_tts_audio_.store(true);
                 audio_service_.PreparePlayback();
                 Schedule([this]() {
+                    const bool was_music = music_session_;
+                    music_session_ = false;
+                    music_tts_barrier_ = true;
                     aborted_ = false;
-                    SetDeviceState(kDeviceStateSpeaking);
+                    if (!SetDeviceState(kDeviceStateSpeaking) && was_music &&
+                        listening_mode_ == kListeningModeRealtime) {
+                        audio_service_.EnableWakeWordDetection(false);
+                        // TTS 已在网络任务入队，恢复采音时不能清掉这些帧。
+                        audio_service_.EnableVoiceProcessing(true, false);
+                    }
                 });
             } else if (strcmp(state->valuestring, "stop") == 0) {
                 Schedule([this]() {
+                    if (voice_exit_.load()) {
+                        accept_tts_audio_.store(false);
+                        return;
+                    }
+                    if (rest_after_reply_.exchange(false)) {
+                        accept_tts_audio_.store(false);
+                        if (protocol_ && protocol_->IsAudioChannelOpened()) {
+                            protocol_->CloseAudioChannel();
+                        } else {
+                            SetDeviceState(kDeviceStateIdle);
+                        }
+                        return;
+                    }
                     accept_tts_audio_.store(false);
+                    music_tts_barrier_ = false;
+                    music_ready_after_ = std::chrono::steady_clock::now() + std::chrono::milliseconds(300);
                     if (GetDeviceState() == kDeviceStateSpeaking) {
                         if (listening_mode_ == kListeningModeManualStop) {
                             SetDeviceState(kDeviceStateIdle);
@@ -570,9 +684,31 @@ void Application::InitializeProtocol() {
             auto text = cJSON_GetObjectItem(root, "text");
             if (cJSON_IsString(text)) {
                 ESP_LOGI(TAG, ">> %s", text->valuestring);
-                Schedule([display, message = std::string(text->valuestring)]() {
-                    display->SetChatMessage("user", message.c_str());
-                });
+                const std::string message = text->valuestring;
+                if (IsRestText(message)) {
+                    ESP_LOGI(TAG, "Rest after this reply: %s", message.c_str());
+                    rest_after_reply_.store(true);
+                    Schedule([display, message]() {
+                        display->SetChatMessage("user", message.c_str());
+                    });
+                } else if (IsVoiceExitText(message)) {
+                    ESP_LOGI(TAG, "Voice exit while listening: %s", message.c_str());
+                    voice_exit_.store(true);
+                    accept_tts_audio_.store(false);
+                    Schedule([this, display, message]() {
+                        display->SetChatMessage("user", message.c_str());
+                        if (protocol_ && protocol_->IsAudioChannelOpened()) {
+                            protocol_->CloseAudioChannel();
+                        } else {
+                            voice_exit_.store(false);
+                            SetDeviceState(kDeviceStateIdle);
+                        }
+                    });
+                } else {
+                    Schedule([display, message]() {
+                        display->SetChatMessage("user", message.c_str());
+                    });
+                }
             }
         } else if (strcmp(type->valuestring, "llm") == 0) {
             auto emotion = cJSON_GetObjectItem(root, "emotion");
@@ -702,6 +838,7 @@ void Application::StopListening() {
 }
 
 void Application::HandleToggleChatEvent() {
+    StopMusic();
     auto state = GetDeviceState();
     
     if (state == kDeviceStateActivating) {
@@ -760,6 +897,7 @@ void Application::ContinueOpenAudioChannel(ListeningMode mode) {
 }
 
 void Application::HandleStartListeningEvent() {
+    StopMusic();
     auto state = GetDeviceState();
     
     if (state == kDeviceStateActivating) {
@@ -808,6 +946,7 @@ void Application::HandleStopListeningEvent() {
 }
 
 void Application::HandleWakeWordDetectedEvent() {
+    StopMusic();
     if (!protocol_) {
         return;
     }
@@ -831,22 +970,18 @@ void Application::HandleWakeWordDetectedEvent() {
         }
         // Channel already opened, continue directly
         ContinueWakeWordInvoke(wake_word);
-    } else if (state == kDeviceStateSpeaking || state == kDeviceStateListening) {
+    } else if (state == kDeviceStateListening) {
+        // 聆听中再说唤醒词：结束会话，回到待命。检测回调自己已经停掉唤醒词。
+        if (protocol_->IsAudioChannelOpened()) {
+            protocol_->CloseAudioChannel();
+        }
+    } else if (state == kDeviceStateSpeaking) {
         AbortSpeaking(kAbortReasonWakeWordDetected);
         // Clear send queue to avoid sending residues to server
         while (audio_service_.PopPacketFromSendQueue());
-
-        if (state == kDeviceStateListening) {
-            protocol_->SendStartListening(GetDefaultListeningMode());
-            audio_service_.ResetDecoder();
-            audio_service_.PlaySound(Lang::Sounds::OGG_POPUP);
-            // Re-enable wake word detection as it was stopped by the detection itself
-            audio_service_.EnableWakeWordDetection(true);
-        } else {
-            // Play popup sound and start listening again
-            play_popup_on_listening_ = true;
-            SetListeningMode(GetDefaultListeningMode());
-        }
+        // Play popup sound and start listening again
+        play_popup_on_listening_ = true;
+        SetListeningMode(GetDefaultListeningMode());
     } else if (state == kDeviceStateActivating) {
         // Restart the activation check if the wake word is detected during activation
         SetDeviceState(kDeviceStateIdle);
@@ -927,13 +1062,8 @@ void Application::HandleStateChangedEvent() {
                 audio_service_.EnableVoiceProcessing(true);
             }
 
-#ifdef CONFIG_WAKE_WORD_DETECTION_IN_LISTENING
-            // Enable wake word detection in listening mode (configured via Kconfig)
-            audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
-#else
-            // Disable wake word detection in listening mode
-            audio_service_.EnableWakeWordDetection(false);
-#endif
+            // 聆听中保持唤醒词，说「你好小智」可以直接结束会话。
+            audio_service_.EnableWakeWordDetection(true);
             
             // Play popup sound after ResetDecoder (in EnableVoiceProcessing) has been called
             if (play_popup_on_listening_) {
@@ -944,7 +1074,10 @@ void Application::HandleStateChangedEvent() {
         case kDeviceStateSpeaking:
             display->SetStatus(Lang::Strings::SPEAKING);
 
-            if (listening_mode_ != kListeningModeRealtime) {
+            if (music_session_) {
+                audio_service_.EnableVoiceProcessing(false);
+                audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
+            } else if (listening_mode_ != kListeningModeRealtime) {
                 audio_service_.EnableVoiceProcessing(false);
                 // Only AFE wake word can be detected in speaking mode
                 audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
@@ -971,6 +1104,7 @@ void Application::Schedule(std::function<void()>&& callback) {
 }
 
 void Application::AbortSpeaking(AbortReason reason) {
+    StopMusic();
     ESP_LOGI(TAG, "Abort speaking");
     aborted_ = true;
     accept_tts_audio_.store(false);
@@ -990,6 +1124,7 @@ ListeningMode Application::GetDefaultListeningMode() const {
 }
 
 void Application::Reboot() {
+    StopMusic();
     ESP_LOGI(TAG, "Rebooting...");
     // Disconnect the audio channel
     if (protocol_ && protocol_->IsAudioChannelOpened()) {
@@ -1003,6 +1138,7 @@ void Application::Reboot() {
 }
 
 bool Application::UpgradeFirmware(const std::string& url, const std::string& version) {
+    StopMusic();
     auto& board = Board::GetInstance();
     auto display = board.GetDisplay();
 
@@ -1088,6 +1224,9 @@ void Application::WakeWordInvoke(const std::string& wake_word) {
 }
 
 bool Application::CanEnterSleepMode() {
+    if (music_player_.IsActive() || music_player_.HasPending()) {
+        return false;
+    }
     if (GetDeviceState() != kDeviceStateIdle) {
         return false;
     }
@@ -1147,12 +1286,81 @@ void Application::SetAecMode(AecMode mode) {
     });
 }
 
+std::string Application::PlayMusicUrl(const std::string& url, const std::string& title) {
+    const auto state = GetDeviceState();
+    if (state != kDeviceStateIdle && state != kDeviceStateListening && state != kDeviceStateSpeaking) {
+        throw std::runtime_error("当前设备状态不能播放音乐");
+    }
+    StopMusic();
+    std::string error;
+    if (!music_player_.Request(url, title, error)) {
+        throw std::runtime_error(error);
+    }
+    // 工具回包之后通常还有一句 TTS 确认；先等待其结束，不抢占这句话。
+    music_ready_after_ = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    xEventGroupSetBits(event_group_, MAIN_EVENT_CLOCK_TICK);
+    return "{\"accepted\":true,\"state\":\"pending\",\"message\":\"已接受请求，等待当前回复结束后下载；实际状态请查询 self.music.get_status\"}";
+}
+
+void Application::RestoreAfterMusic() {
+    if (!music_session_) {
+        return;
+    }
+    music_session_ = false;
+    if (GetDeviceState() == kDeviceStateSpeaking) {
+        if (protocol_ && protocol_->IsAudioChannelOpened()) {
+            SetListeningMode(GetDefaultListeningMode());
+        } else {
+            SetDeviceState(kDeviceStateIdle);
+            Board::GetInstance().SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
+        }
+    }
+}
+
+void Application::StopMusic() {
+    if (music_player_.IsActive() || music_player_.HasPending() || music_session_) {
+        music_player_.Stop();
+        RestoreAfterMusic();
+    }
+}
+
+void Application::PollMusic() {
+    if (music_player_.TakeFinished()) {
+        RestoreAfterMusic();
+    }
+    std::lock_guard<std::mutex> transition_lock(music_transition_mutex_);
+    if (!music_player_.HasPending() || music_tts_barrier_ || accept_tts_audio_.load() ||
+        std::chrono::steady_clock::now() < music_ready_after_ || !audio_service_.IsPlaybackDrained()) {
+        return;
+    }
+    const auto state = GetDeviceState();
+    if (state != kDeviceStateListening && state != kDeviceStateIdle) {
+        return;
+    }
+    if (!music_player_.StartPending()) {
+        return;
+    }
+    audio_service_.EnableVoiceProcessing(false);
+    while (audio_service_.PopPacketFromSendQueue()) {}
+    if (protocol_ && protocol_->IsAudioChannelOpened()) {
+        protocol_->SendStopListening();
+    }
+    music_session_ = true;
+    play_popup_on_listening_ = false;
+    Board::GetInstance().SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+    SetDeviceState(kDeviceStateSpeaking);
+    audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
+}
+
 void Application::PlaySound(const std::string_view& sound) {
+    StopMusic();
     audio_service_.PlaySound(sound);
 }
 
 void Application::ResetProtocol() {
     Schedule([this]() {
+        StopMusic();
+        music_tts_barrier_ = false;
         // Close audio channel if opened
         if (protocol_ && protocol_->IsAudioChannelOpened()) {
             protocol_->CloseAudioChannel();

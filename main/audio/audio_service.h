@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <chrono>
 #include <mutex>
+#include <atomic>
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -92,7 +93,8 @@ enum AudioTaskType {
 struct AudioTask {
     AudioTaskType type;
     std::vector<int16_t> pcm;
-    uint32_t timestamp;
+    uint32_t timestamp = 0;
+    uint32_t generation = 0;
 };
 
 struct DebugStatistics {
@@ -121,7 +123,9 @@ public:
     bool IsAfeWakeWord();
 
     void EnableWakeWordDetection(bool enable);
-    void EnableVoiceProcessing(bool enable);
+    void EnableVoiceProcessing(bool enable, bool reset_decoder = true);
+    // 拍照/上传期间停掉麦克风读取。采集任务不会把输入重新打开。
+    void SuspendVoiceInput(bool suspend);
     void EnableAudioTesting(bool enable);
     void EnableDeviceAec(bool enable);
 
@@ -133,6 +137,12 @@ public:
     void PreparePlayback();
     bool ReadAudioData(std::vector<int16_t>& data, int sample_rate, int samples);
     void ResetDecoder();
+    // 独占音乐输出；轮次失效后生产者立即退出，不阻塞主线程。
+    uint32_t BeginMusicPlayback();
+    void EndMusicPlayback(uint32_t generation);
+    bool PushMusicPcm(std::vector<int16_t>&& pcm, uint32_t generation);
+    bool IsPlaybackDrained();
+    uint32_t PlayedMusicFrames(uint32_t generation);
     void SetModelsList(srmodel_list_t* models_list);
 
 private:
@@ -167,6 +177,11 @@ private:
     TaskHandle_t opus_codec_task_handle_ = nullptr;
     std::mutex audio_queue_mutex_;
     std::condition_variable audio_queue_cv_;
+    uint32_t playback_generation_ = 0;
+    uint32_t played_music_frames_ = 0;
+    bool music_playback_ = false;
+    bool decoding_ = false;
+    bool output_in_flight_ = false;
     std::deque<std::unique_ptr<AudioStreamPacket>> audio_decode_queue_;
     std::deque<std::unique_ptr<AudioStreamPacket>> audio_send_queue_;
     std::deque<std::unique_ptr<AudioStreamPacket>> audio_testing_queue_;
@@ -180,6 +195,7 @@ private:
     bool voice_detected_ = false;
     bool service_stopped_ = true;
     bool audio_input_need_warmup_ = false;
+    std::atomic<bool> voice_input_suspended_{false};
 
     esp_timer_handle_t audio_power_timer_ = nullptr;
     std::chrono::steady_clock::time_point last_input_time_;

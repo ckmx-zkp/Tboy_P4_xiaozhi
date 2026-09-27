@@ -1,6 +1,7 @@
 #include "wifi_board.h"
 #include "codecs/box_audio_codec.h"
 #include "application.h"
+#include "mcp_server.h"
 #include "button.h"
 #include "config.h"
 #include "camera.h"
@@ -534,6 +535,29 @@ private:
         }
     }
 
+    void InitializeMusicTools() {
+        auto& mcp = McpServer::GetInstance();
+        mcp.AddTool("self.music.play_url",
+            "播放音乐搜索工具返回的 audio_url。仅支持 HTTP(S) Ogg/Opus；不是网页、MP3 或 m3u8。"
+            "异步接受请求，当前语音回复结束后开始下载；accepted 不表示已出声。播放时可用唤醒词或 BOOT 打断。",
+            PropertyList({Property("url", kPropertyTypeString),
+                          Property("title", kPropertyTypeString, std::string(""))}),
+            [](const PropertyList& properties) -> ReturnValue {
+                return Application::GetInstance().PlayMusicUrl(
+                    properties["url"].value<std::string>(), properties["title"].value<std::string>());
+            });
+        mcp.AddTool("self.music.stop", "停止音乐或取消待播放请求。", PropertyList(),
+            [](const PropertyList&) -> ReturnValue {
+                auto& app = Application::GetInstance();
+                app.StopMusic();
+                return app.GetMusicStatus();
+            });
+        mcp.AddTool("self.music.get_status", "查询音乐 pending/loading/playing/completed/stopped/error 状态及失败原因。",
+            PropertyList(), [](const PropertyList&) -> ReturnValue {
+                return Application::GetInstance().GetMusicStatus();
+            });
+    }
+
 public:
     Esp32S3UsbCamBoard() : boot_button_(BOOT_BUTTON_GPIO) {
         ESP_LOGW(TAG, "S3 USB-cam: WiFi+audio+eyes+WS2812; UART1 K230; 4G test=%d touch=%d",
@@ -543,6 +567,7 @@ public:
         InitializeLedPower();
         InitializeCodecI2c();
         InitializeButtons();
+        InitializeMusicTools();
 #if BOARD_ENABLE_TOUCH_TEST
         InitializeCapacitiveTouch();
 #endif
