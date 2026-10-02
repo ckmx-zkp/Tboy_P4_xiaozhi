@@ -36,7 +36,8 @@ public:
 
         mcp.AddTool(
             "self.eye.close",
-            "闭上双眼保持睡眠，不改灯。用户说闭眼、睡觉、休息眼睛时调用。醒来用 self.eye.open。",
+            "闭上双眼保持睡眠，不改灯。只在用户明确说闭眼、闭上眼睛、闭上双眼时调用。"
+            "说休息、晚安、睡觉、去休息时不要调用，眼睛保持睁开。醒来用 self.eye.open。",
             PropertyList(),
             [this](const PropertyList&) -> ReturnValue {
                 display_->SetClosed(true);

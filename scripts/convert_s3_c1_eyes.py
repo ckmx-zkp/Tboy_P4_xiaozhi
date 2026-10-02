@@ -4,8 +4,8 @@
 默认读 image/ 根目录。星座套件用 --src image/zodiac/scorpio 等，
 不要直接扫 image/zodiac（会混三套）。
 
-圆屏能看到整段 GC9107 GRAM。不要把虹膜放大到 160 高（会顶边、显大），
-也不要 115 贴顶（会整只眼睛偏上）。正方形虹膜缩小后贴进 128×160，并略向下。
+圆屏玻璃约 128×115，IC GRAM 仍是 128×160。虹膜铺满 128 宽，消掉左右黑边；
+垂直放在大约第 26 到 154 行，对准玻璃开孔，不要拉成 160 高。
 左眼由固件水平镜像，这里只出一套右眼资产。
 
 新素材：主眼 RGBA 透明 + 圆外光晕；表情/眨眼多为不透明黑底。
@@ -27,10 +27,10 @@ except ImportError:
 
 W, H = 128, 160
 SQUARE = 128
-# 相对屏宽留一圈黑边；160 铺满会比 0.99 寸圆玻璃显大
-EYE_SIZE = 108
-# 相对 160 行几何中心再往下；真机仍偏上约 15%
-SHIFT_Y = 20
+# 铺满 128 列，消掉左右各 10px 黑边。不要拉到 160 高。
+EYE_SIZE = 128
+# (160-128)/2=16，再下移 10 → 虹膜落在第 26–154 行。
+SHIFT_Y = 10
 
 NAMES = (
     "eye_master",
@@ -134,7 +134,7 @@ def fill_eye(im: Image.Image, pad_frac: float = 0.01, threshold: int = 28) -> Im
 
 
 def to_panel(im: Image.Image) -> Image.Image:
-    """缩小圆眼，水平居中，垂直在 GRAM 中心基础上再下移 SHIFT_Y。"""
+    """圆眼铺满屏宽，垂直按 SHIFT_Y 对准玻璃开孔。"""
     if im.size != (SQUARE, SQUARE):
         im = im.resize((SQUARE, SQUARE), Image.Resampling.LANCZOS)
     eye = im.resize((EYE_SIZE, EYE_SIZE), Image.Resampling.LANCZOS)

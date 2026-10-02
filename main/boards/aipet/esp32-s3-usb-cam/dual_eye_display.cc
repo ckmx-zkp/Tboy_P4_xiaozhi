@@ -32,7 +32,10 @@ EYE_ASSET(eye_blink_closed_bin)
 
 namespace {
 constexpr int kFps = 12;
-constexpr int kGazeShift = 12;
+constexpr int kGazeShift = 8;
+// 玻璃开孔相对 GRAM 偏左上。正值把画面往右、往下移，左右眼方向一致。
+constexpr int kPanelBiasX = 6;
+constexpr int kPanelBiasY = 8;
 constexpr int kBlinkSeq[] = {0, 1, 2, 1};
 constexpr int kBlinkSeqLen = 4;
 }  // namespace
@@ -311,13 +314,15 @@ void DualEyeDisplay::SetAutoIdle(bool on) {
 }
 
 void DualEyeDisplay::PackBe(const uint16_t* src, bool mirror, int dx, int dy) {
-    // 右眼：资产原样 + 视线偏移。左眼先镜像，再用同样的玻璃方向偏移。
+    // 右眼资产原样。左眼先镜像。视线偏移沿用原方向；开孔校正按玻璃的右、下。
     for (int y = 0; y < height_; ++y) {
         for (int x = 0; x < width_; ++x) {
             int sx = mirror ? (width_ - 1 - x) : x;
             int sy = y;
             sx -= dx;
             sy -= dy;
+            sx += mirror ? kPanelBiasX : -kPanelBiasX;
+            sy -= kPanelBiasY;
             uint16_t v = 0;
             if (sx >= 0 && sx < width_ && sy >= 0 && sy < height_) {
                 v = src[sy * width_ + sx];

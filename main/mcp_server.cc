@@ -104,7 +104,8 @@ void McpServer::AddCommonTools() {
             "必须立刻调用本工具，不要先说话。禁止口头说正在拍、已经拍了或相机不可用。\n"
             "Always use this tool to see. Never claim the camera is unavailable.\n"
             "Args:\n"
-            "  `question`: 想确认的一件事，例如：他现在在做什么。不要要求逐项描述外貌。\n"
+            "  `question`: 用户真正要看的那一件事，用原话，例如「我在做什么」「桌上的牛奶」。"
+            "不要写成描述整张图、看整体、或逐项说明。\n"
             "Return:\n"
             "  识图 JSON。若 success 为 false，据实转述服务端原因，不要说设备没有相机。",
             PropertyList({

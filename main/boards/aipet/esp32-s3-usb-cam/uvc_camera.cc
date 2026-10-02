@@ -22,8 +22,8 @@
 #define USB_HOST_TASK_PRIO 15
 #define FRAME_WAIT_MS 5000
 #define OPEN_WAIT_MS 8000
-#define BURST_FRAMES 3
-#define BURST_SCAN_FRAMES 12
+#define BURST_FRAMES 1
+#define BURST_SCAN_FRAMES 4
 
 UvcCamera::UvcCamera() {
     ESP_LOGI(TAG, "U4 UVC camera D-=GPIO%d D+=GPIO%d", USB_DMINUS_GPIO, USB_DPLUS_GPIO);
@@ -348,6 +348,16 @@ bool UvcCamera::CaptureFormat(uint16_t w, uint16_t h, float fps, int urb_count, 
         return false;
     }
 
+    if (CAMERA_UPLOAD_ORIGINAL) {
+        jpeg_ = std::move(burst.front());
+        burst_count_ = 1;
+        width_ = w;
+        height_ = h;
+        ESP_LOGI(TAG, "original jpeg %ux%u %u bytes", width_, height_,
+                 static_cast<unsigned>(jpeg_.size()));
+        return true;
+    }
+
     uint16_t composed_w = w;
     uint16_t composed_h = h;
     std::vector<uint8_t> composed;
@@ -509,10 +519,6 @@ std::string UvcCamera::Explain(const std::string& question) {
     }
 
     std::string ask = question;
-    if (burst_count_ > 1) {
-        ask = "现场是连续" + std::to_string(burst_count_) +
-              "帧，看整体在做什么就行。" + question;
-    }
 
     std::string question_field;
     question_field += "--" + boundary + "\r\n";

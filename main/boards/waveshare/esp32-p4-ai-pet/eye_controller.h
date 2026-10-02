@@ -49,8 +49,9 @@ public:
 
         mcp_server.AddTool(
             "self.eye.close",
-            "Close the pet eye and keep it closed (sleep). Call this when the user asks the "
-            "pet to close its eyes, go to sleep, or rest its eyes. Use self.eye.open to wake.",
+            "Close the pet eye and keep it closed. Call only when the user explicitly asks "
+            "to close the eyes. Do not call for rest, sleep, or good night; leave the eyes "
+            "open. Use self.eye.open to open them again.",
             PropertyList(),
             [this](const PropertyList& properties) -> ReturnValue {
                 display_->SetClosed(true);

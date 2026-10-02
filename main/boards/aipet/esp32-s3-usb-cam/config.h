@@ -37,7 +37,8 @@
 // 双眼 XJ0.99TFT-12P / GC9107，4-line SPI；资料 hardware/XJ0.99TFT-12P/
 // 资料写玻璃 128×115，IC GRAM 固定 128×160。圆屏实际能看到整段 160 行；
 // 只刷 115 行会下半花屏，115 贴顶会偏上，放大到 160 高会顶边显大。
-// 资产：108×108 圆眼贴进 128×160，相对中心再下移 20px。
+// 资产：128×128 圆眼贴进 128×160，落在第 26–154 行。视线平移 8px。
+// 送屏再往右 6px、往下 8px，补玻璃开孔偏左上。
 // RES 与 ESP EN 短接，软件不再单独复位。
 #define DISPLAY_WIDTH            128
 #define DISPLAY_HEIGHT           160
@@ -94,7 +95,10 @@
 #define SERVO_MAX_DEG            180
 #define SERVO_CENTER_DEG         90
 #define SERVO_TRACK_SPAN_DEG     45    // 跟随限幅：中位 ±45°
-#define SERVO_PAN_INVERT         0     // 1=人脸在左时舵机反转
+// 扭头跟随看 K230 pose.yaw，不看画面里的人脸位置。
+// yaw>0 且 dir=right 表示脑袋往右。实机再镜像一次后，舵机角度增大（大于 90°）。
+// 1=机械安装左右反了，语音点动和扭头跟随一起再翻一次。
+#define SERVO_PAN_INVERT         0
 #define SERVO_SLEW_DEG_PER_S     80
 #define SERVO_FACE_LOST_MS       800
 #define SERVO_DEADZONE           0.08f
@@ -122,6 +126,8 @@
 #define USB_DPLUS_GPIO           GPIO_NUM_20
 // U4 模组横出 640×480，安装后画面横置。1=顺时针 90°，3=顺时针 270°，0=不转。
 #define CAMERA_ROTATE_90         1
+// 1=上传相机原始 JPEG，不解码、不旋转、不重压。0=按 CAMERA_ROTATE_90 转正后再压。
+#define CAMERA_UPLOAD_ORIGINAL   1
 
 #define UNUSED_GPIO_9            GPIO_NUM_9
 #define UNUSED_GPIO_21           GPIO_NUM_21
