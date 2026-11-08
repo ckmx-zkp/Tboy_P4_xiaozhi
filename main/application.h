@@ -11,10 +11,12 @@
 #include <deque>
 #include <memory>
 #include <functional>
+#include <atomic>
 
 #include "protocol.h"
 #include "ota.h"
 #include "audio_service.h"
+#include "music_player.h"
 #include "device_state.h"
 #include "device_state_machine.h"
 
@@ -114,6 +116,9 @@ public:
     AecMode GetAecMode() const { return aec_mode_; }
     void PlaySound(const std::string_view& sound);
     AudioService& GetAudioService() { return audio_service_; }
+    std::string PlayMusicUrl(const std::string& url, const std::string& title);
+    void StopMusic();
+    std::string GetMusicStatus() { return music_player_.GetStatus(); }
     
     /**
      * Reset protocol resources (thread-safe)
@@ -136,12 +141,26 @@ private:
     AecMode aec_mode_ = kAecOff;
     std::string last_error_message_;
     AudioService audio_service_;
+    MusicPlayer music_player_{audio_service_};
+    std::mutex music_transition_mutex_;
+    bool music_session_ = false; // 只在主任务读写
+    bool music_tts_barrier_ = false;
+    // 识别到退出说法后忽略随后的 tts start，避免关通道后又被拉回说话中。
+    std::atomic<bool> voice_exit_{false};
+    // 休息/睡觉：先播完这一句，再关通道。
+    std::atomic<bool> rest_after_reply_{false};
+    std::chrono::steady_clock::time_point music_ready_after_;
+    void PollMusic();
+    void RestoreAfterMusic();
     std::unique_ptr<Ota> ota_;
 
     std::function<void(const std::string&)> mcp_broadcast_callback_;
 
     bool has_server_time_ = false;
     bool aborted_ = false;
+    // Set on the websocket task when TTS start arrives, before the main loop
+    // switches to speaking. Audio frames in that gap used to be discarded.
+    std::atomic<bool> accept_tts_audio_{false};
     bool assets_version_checked_ = false;
     bool play_popup_on_listening_ = false;  // Flag to play popup sound after state changes to listening
     int clock_ticks_ = 0;

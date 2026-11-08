@@ -1,6 +1,7 @@
 #include "wifi_board.h"
 #include "codecs/box_audio_codec.h"
 #include "application.h"
+#include "mcp_server.h"
 #include "button.h"
 #include "config.h"
 #include "camera.h"
@@ -64,6 +65,8 @@ private:
     Mg90sServo servo_;
     FaceFollowController* follow_ = nullptr;
     ServoController* servo_ctrl_ = nullptr;
+    esp_lcd_panel_io_handle_t left_eye_io_ = nullptr;
+    esp_lcd_panel_io_handle_t right_eye_io_ = nullptr;
     esp_lcd_panel_handle_t left_eye_ = nullptr;
     esp_lcd_panel_handle_t right_eye_ = nullptr;
 
@@ -297,8 +300,7 @@ private:
         return true;
     }
 
-    esp_lcd_panel_handle_t CreateGc9107Eye(gpio_num_t cs) {
-        esp_lcd_panel_io_handle_t io = nullptr;
+    esp_lcd_panel_handle_t CreateGc9107Eye(gpio_num_t cs, esp_lcd_panel_io_handle_t& io) {
         esp_lcd_panel_io_spi_config_t io_cfg = {};
         io_cfg.cs_gpio_num = cs;
         io_cfg.dc_gpio_num = DISPLAY_SPI_DC_PIN;
@@ -347,15 +349,17 @@ private:
         if (!InitializeEyeSpi()) {
             return;
         }
-        left_eye_ = CreateGc9107Eye(DISPLAY_SPI_CS1_PIN);
-        right_eye_ = CreateGc9107Eye(DISPLAY_SPI_CS2_PIN);
+        left_eye_ = CreateGc9107Eye(DISPLAY_SPI_CS1_PIN, left_eye_io_);
+        right_eye_ = CreateGc9107Eye(DISPLAY_SPI_CS2_PIN, right_eye_io_);
         if (left_eye_ == nullptr || right_eye_ == nullptr) {
             ESP_LOGE(TAG, "GC9107 eyes missing, skip C1 animation");
             return;
         }
-        eyes_ = new DualEyeDisplay(left_eye_, right_eye_, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+        eyes_ = new DualEyeDisplay(left_eye_, right_eye_, DISPLAY_WIDTH, DISPLAY_HEIGHT,
+                                   left_eye_io_, right_eye_io_);
         eye_ctrl_ = new EyeController(eyes_, led_mood_);
-        ESP_LOGI(TAG, "C1 dual eyes ready: right=original left=mirrored");
+        ESP_LOGI(TAG, "C1 dual eyes ready: left CS=GPIO%d mirrored, right CS=GPIO%d original, BL=GPIO%d",
+                 DISPLAY_SPI_CS1_PIN, DISPLAY_SPI_CS2_PIN, DISPLAY_BACKLIGHT_PIN);
     }
 
     bool OpenUart(uart_port_t port, gpio_num_t tx, gpio_num_t rx, int baud,
@@ -534,15 +538,39 @@ private:
         }
     }
 
+    void InitializeMusicTools() {
+        auto& mcp = McpServer::GetInstance();
+        mcp.AddTool("self.music.play_url",
+            "播放音乐搜索工具返回的 audio_url。仅支持 HTTP(S) Ogg/Opus；不是网页、MP3 或 m3u8。"
+            "异步接受请求，当前语音回复结束后开始下载；accepted 不表示已出声。播放时可用唤醒词或 BOOT 打断。",
+            PropertyList({Property("url", kPropertyTypeString),
+                          Property("title", kPropertyTypeString, std::string(""))}),
+            [](const PropertyList& properties) -> ReturnValue {
+                return Application::GetInstance().PlayMusicUrl(
+                    properties["url"].value<std::string>(), properties["title"].value<std::string>());
+            });
+        mcp.AddTool("self.music.stop", "停止音乐或取消待播放请求。", PropertyList(),
+            [](const PropertyList&) -> ReturnValue {
+                auto& app = Application::GetInstance();
+                app.StopMusic();
+                return app.GetMusicStatus();
+            });
+        mcp.AddTool("self.music.get_status", "查询音乐 pending/loading/playing/completed/stopped/error 状态及失败原因。",
+            PropertyList(), [](const PropertyList&) -> ReturnValue {
+                return Application::GetInstance().GetMusicStatus();
+            });
+    }
+
 public:
     Esp32S3UsbCamBoard() : boot_button_(BOOT_BUTTON_GPIO) {
         ESP_LOGW(TAG, "S3 USB-cam: WiFi+audio+eyes+WS2812; UART1 K230; 4G test=%d touch=%d",
                  BOARD_ENABLE_4G_TEST, BOARD_ENABLE_TOUCH_TEST);
-        ESP_LOGW(TAG, "PA_EN schematic GPIO46 is input-only; codec PA pin left NC");
+        ESP_LOGI(TAG, "PA_EN GPIO46 output: high while playing, low when idle");
         camera_.StartHost();
         InitializeLedPower();
         InitializeCodecI2c();
         InitializeButtons();
+        InitializeMusicTools();
 #if BOARD_ENABLE_TOUCH_TEST
         InitializeCapacitiveTouch();
 #endif
@@ -574,7 +602,8 @@ public:
             AUDIO_CODEC_PA_PIN,
             AUDIO_CODEC_ES8311_ADDR,
             AUDIO_CODEC_ES7210_ADDR,
-            AUDIO_INPUT_REFERENCE);
+            AUDIO_INPUT_REFERENCE,
+            true);
         return &audio_codec;
     }
 

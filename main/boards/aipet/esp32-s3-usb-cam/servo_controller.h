@@ -22,8 +22,8 @@ public:
         auto& mcp = McpServer::GetInstance();
         mcp.AddTool(
             "self.servo.set_follow",
-            "打开或关闭人脸自动跟随（默认开）。关闭后舵机停在当前角。"
-            "enabled：true/false。",
+            "打开或关闭脑袋扭动跟随（默认开）。脑袋往右时舵机角度增大。"
+            "关闭后舵机停在当前角。enabled：true/false。",
             PropertyList({Property("enabled", kPropertyTypeBoolean, true)}),
             [this](const PropertyList& properties) -> ReturnValue {
                 follow_->SetFollowEnabled(properties["enabled"].value<bool>());

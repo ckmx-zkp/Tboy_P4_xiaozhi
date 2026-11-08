@@ -23,6 +23,8 @@ public:
     virtual void SetInputGain(float gain);
     virtual void EnableInput(bool enable);
     virtual void EnableOutput(bool enable);
+    // Raise the external amplifier before the first PCM sample arrives.
+    virtual void PreparePlayback() {}
 
     virtual void OutputData(std::vector<int16_t>& data);
     virtual bool InputData(std::vector<int16_t>& data);

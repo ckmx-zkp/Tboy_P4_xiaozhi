@@ -42,7 +42,8 @@ void FaceFollowController::SetManualAngle(float deg) {
     }
 }
 
-bool FaceFollowController::ParseOffset(const char* line, bool* face, float* dx, float* dy) {
+bool FaceFollowController::ParseOffset(const char* line, bool* face, float* dx, float* dy,
+                                       bool* have_yaw, float* yaw_norm) {
     if (line == nullptr || line[0] != '{') {
         return false;
     }
@@ -54,7 +55,8 @@ bool FaceFollowController::ParseOffset(const char* line, bool* face, float* dx, 
     bool present = false;
     float out_dx = 0;
     float out_dy = 0;
-    bool have_norm = false;
+    bool got_yaw = false;
+    float out_yaw = 0;
 
     if (cJSON* face_obj = cJSON_GetObjectItemCaseSensitive(root, "face")) {
         if (cJSON* p = cJSON_GetObjectItemCaseSensitive(face_obj, "present")) {
@@ -68,30 +70,26 @@ bool FaceFollowController::ParseOffset(const char* line, bool* face, float* dx, 
     }
 
     if (cJSON* tr = cJSON_GetObjectItemCaseSensitive(root, "tracking")) {
-        if (cJSON* jdx = cJSON_GetObjectItemCaseSensitive(tr, "dx")) {
-            if (cJSON_IsNumber(jdx)) {
-                out_dx = static_cast<float>(jdx->valuedouble);
-                have_norm = true;
+        if (cJSON_IsObject(tr)) {
+            if (cJSON* jdx = cJSON_GetObjectItemCaseSensitive(tr, "dx")) {
+                if (cJSON_IsNumber(jdx)) {
+                    out_dx = static_cast<float>(jdx->valuedouble);
+                }
             }
-        }
-        if (cJSON* jdy = cJSON_GetObjectItemCaseSensitive(tr, "dy")) {
-            if (cJSON_IsNumber(jdy)) {
-                out_dy = static_cast<float>(jdy->valuedouble);
+            if (cJSON* jdy = cJSON_GetObjectItemCaseSensitive(tr, "dy")) {
+                if (cJSON_IsNumber(jdy)) {
+                    out_dy = static_cast<float>(jdy->valuedouble);
+                }
             }
         }
     }
 
-    if (!have_norm) {
-        if (cJSON* pose = cJSON_GetObjectItemCaseSensitive(root, "pose")) {
+    if (cJSON* pose = cJSON_GetObjectItemCaseSensitive(root, "pose")) {
+        if (cJSON_IsObject(pose)) {
             if (cJSON* yaw = cJSON_GetObjectItemCaseSensitive(pose, "yaw")) {
                 if (cJSON_IsNumber(yaw)) {
-                    out_dx = Clampf(static_cast<float>(yaw->valuedouble) * kYawToNorm, -1.f, 1.f);
-                    have_norm = true;
-                }
-            }
-            if (cJSON* pitch = cJSON_GetObjectItemCaseSensitive(pose, "pitch")) {
-                if (cJSON_IsNumber(pitch)) {
-                    out_dy = Clampf(static_cast<float>(pitch->valuedouble) * kYawToNorm, -1.f, 1.f);
+                    out_yaw = Clampf(static_cast<float>(yaw->valuedouble) * kYawToNorm, -1.f, 1.f);
+                    got_yaw = true;
                 }
             }
         }
@@ -101,7 +99,9 @@ bool FaceFollowController::ParseOffset(const char* line, bool* face, float* dx, 
     *face = present;
     *dx = Clampf(out_dx, -1.f, 1.f);
     *dy = Clampf(out_dy, -1.f, 1.f);
-    return present || have_norm;
+    *have_yaw = got_yaw;
+    *yaw_norm = out_yaw;
+    return present || got_yaw;
 }
 
 void FaceFollowController::SlewTo(float target_deg) {
@@ -122,26 +122,32 @@ void FaceFollowController::SlewTo(float target_deg) {
     }
 }
 
-void FaceFollowController::Apply(bool face, float dx, float dy) {
+void FaceFollowController::Apply(bool face, float dx, float dy, bool have_yaw, float yaw_norm) {
     const int64_t now = esp_timer_get_time();
     if (face) {
         face_ = true;
         last_face_us_ = now;
         last_dx_ = dx;
         last_dy_ = dy;
-        if (std::fabs(dx) < SERVO_DEADZONE) {
-            dx = 0;
+        if (have_yaw) {
+            // K230 yaw>0 是脑袋往右。实机再镜像一次：角度增大（大于 90°）。
+            float pan = yaw_norm;
+            if (SERVO_PAN_INVERT) {
+                pan = -pan;
+            }
+            if (std::fabs(pan) < SERVO_DEADZONE) {
+                pan = 0;
+            }
+            const float next = Clampf(
+                static_cast<float>(SERVO_CENTER_DEG) + pan * SERVO_TRACK_SPAN_DEG,
+                static_cast<float>(SERVO_CENTER_DEG - SERVO_TRACK_SPAN_DEG),
+                static_cast<float>(SERVO_CENTER_DEG + SERVO_TRACK_SPAN_DEG));
+            if (std::fabs(next - target_deg_) >= 8.f) {
+                ESP_LOGI(TAG, "head yaw %+.1f deg -> servo %.0f",
+                         yaw_norm / kYawToNorm, next);
+            }
+            target_deg_ = next;
         }
-        if (std::fabs(dy) < SERVO_DEADZONE) {
-            dy = 0;
-        }
-        if (SERVO_PAN_INVERT) {
-            dx = -dx;
-        }
-        target_deg_ = static_cast<float>(SERVO_CENTER_DEG) + dx * SERVO_TRACK_SPAN_DEG;
-        target_deg_ = Clampf(target_deg_,
-                             static_cast<float>(SERVO_CENTER_DEG - SERVO_TRACK_SPAN_DEG),
-                             static_cast<float>(SERVO_CENTER_DEG + SERVO_TRACK_SPAN_DEG));
         if (eyes_ != nullptr) {
             eyes_->SetGazeNorm(dx, dy);
         }
@@ -164,9 +170,11 @@ void FaceFollowController::OnVisionJson(const char* line) {
     bool face = false;
     float dx = 0;
     float dy = 0;
-    if (!ParseOffset(line, &face, &dx, &dy)) {
-        Apply(false, 0, 0);
+    bool have_yaw = false;
+    float yaw_norm = 0;
+    if (!ParseOffset(line, &face, &dx, &dy, &have_yaw, &yaw_norm)) {
+        Apply(false, 0, 0, false, 0);
         return;
     }
-    Apply(face, dx, dy);
+    Apply(face, dx, dy, have_yaw, yaw_norm);
 }

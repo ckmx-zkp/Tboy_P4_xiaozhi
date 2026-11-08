@@ -2,6 +2,7 @@
 #define _DUAL_EYE_DISPLAY_H_
 
 #include <esp_lcd_panel_ops.h>
+#include <esp_lcd_panel_io.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
@@ -13,7 +14,8 @@
 class DualEyeDisplay {
 public:
     DualEyeDisplay(esp_lcd_panel_handle_t left, esp_lcd_panel_handle_t right,
-                   int width, int height);
+                   int width, int height,
+                   esp_lcd_panel_io_handle_t left_io, esp_lcd_panel_io_handle_t right_io);
     ~DualEyeDisplay();
 
     void SetEmotion(const char* emotion);
@@ -34,12 +36,14 @@ private:
     bool LoadFrame(const uint8_t* start, const uint8_t* end, const uint16_t** out);
     const uint16_t* EmotionFrame() const;
     Gaze ParseGaze(const char* dir) const;
-    void FlushBoth(const uint16_t* src);
+    bool FlushBoth(const uint16_t* src);
     void PackBe(const uint16_t* src, bool mirror, int dx, int dy);
-    bool DrawFb(esp_lcd_panel_handle_t panel);
+    bool DrawFb(esp_lcd_panel_handle_t panel, esp_lcd_panel_io_handle_t io);
 
     esp_lcd_panel_handle_t left_ = nullptr;
     esp_lcd_panel_handle_t right_ = nullptr;
+    esp_lcd_panel_io_handle_t left_io_ = nullptr;
+    esp_lcd_panel_io_handle_t right_io_ = nullptr;
     int width_ = 0;
     int height_ = 0;
     uint16_t* fb_ = nullptr;

@@ -7,7 +7,8 @@
 #include <cstdint>
 
 // K230 全量 JSON → ESP32 本地自动跟随。不走 MCP 闭环。
-// 水平：CN2 上的 MG90S 偏航；垂直：只有眼睛（原理图没有第二路 PWM）。
+// 水平：CN2 上的 MG90S 跟脑袋偏航。实机再镜像一次：脑袋往右时舵机角度增大。
+// 垂直：只有眼睛（原理图没有第二路 PWM）。眼睛仍看画面里的人脸位置。
 class FaceFollowController {
 public:
     FaceFollowController(Mg90sServo* servo, DualEyeDisplay* eyes);
@@ -26,8 +27,9 @@ public:
     void OnVisionJson(const char* line);
 
 private:
-    bool ParseOffset(const char* line, bool* face, float* dx, float* dy);
-    void Apply(bool face, float dx, float dy);
+    bool ParseOffset(const char* line, bool* face, float* dx, float* dy,
+                     bool* have_yaw, float* yaw_norm);
+    void Apply(bool face, float dx, float dy, bool have_yaw, float yaw_norm);
     void SlewTo(float target_deg);
 
     Mg90sServo* servo_ = nullptr;

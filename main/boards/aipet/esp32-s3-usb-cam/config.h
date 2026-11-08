@@ -22,10 +22,9 @@
 #define AUDIO_I2S_GPIO_DIN  GPIO_NUM_12
 #define AUDIO_I2S_GPIO_DOUT GPIO_NUM_45
 
-// 原理图 PA_EN 接到模组脚 16 = GPIO46。ESP32-S3 的 GPIO46 为仅输入，
-// 软件拉不了 NS4150B CTRL。当前按 NC 处理，等改版飞线到 GPIO9/21。
-#define AUDIO_CODEC_PA_PIN       GPIO_NUM_NC
-#define AUDIO_CODEC_PA_PIN_SCH   GPIO_NUM_46
+// 原理图 PA_EN = 模组脚 16 = GPIO46 = NS4150B CTRL。高电平开功放。
+// GPIO46 可输出。空闲拉低，播 PCM 时拉高。不要再把该脚硬接到 3.3V。
+#define AUDIO_CODEC_PA_PIN       GPIO_NUM_46
 #define AUDIO_CODEC_I2C_SDA_PIN  GPIO_NUM_1
 #define AUDIO_CODEC_I2C_SCL_PIN  GPIO_NUM_2
 #define AUDIO_CODEC_ES8311_ADDR  ES8311_CODEC_DEFAULT_ADDR  // 7-bit 0x18
@@ -36,24 +35,25 @@
 #define USER_BUTTON_GPIO         GPIO_NUM_4   // SW3 / KEY1
 
 // 双眼 XJ0.99TFT-12P / GC9107，4-line SPI；资料 hardware/XJ0.99TFT-12P/
-// 资料写玻璃 128×115，IC GRAM 固定 128×160。圆屏实际能看到整段 160 行；
-// 只刷 115 行会下半花屏，115 贴顶会偏上，放大到 160 高会顶边显大。
-// 资产：108×108 圆眼贴进 128×160，相对中心再下移 20px。
+// 芯片支持多种硬件行模式；当前圆屏按 128×128 窗口发送，不能强刷 160 行。
+// 资产仍为 128×160，渲染时以 (64,90) 取样，缩放跨度 132（亮部约 128 像素）并居中。
 // RES 与 ESP EN 短接，软件不再单独复位。
 #define DISPLAY_WIDTH            128
-#define DISPLAY_HEIGHT           160
-#define DISPLAY_GRAM_HEIGHT      160
-// 09-13 原理图：FPC9 SCL→IO40_LCD_MOSI，FPC10 SDA→IO41_LCD_SCK（网表名与玻璃脚对反）
+#define DISPLAY_HEIGHT           128
+#define DISPLAY_GRAM_HEIGHT      128
+// SCH_Schematic1 2026-10-16：网名仍和玻璃脚对反。
+// FPC SCL 接到 GPIO40（网名 IO40_LCD_MOSI），SDA 接到 GPIO41（网名 IO41_LCD_SCK）。
+// 软件按玻璃脚接线，不按网表名。
 #define DISPLAY_SPI_SCLK_PIN     GPIO_NUM_40
 #define DISPLAY_SPI_MOSI_PIN     GPIO_NUM_41
 #define DISPLAY_SPI_DC_PIN       GPIO_NUM_39
-#define DISPLAY_SPI_CS1_PIN      GPIO_NUM_17  // FPC5 左眼，原理图 IO17_LCD_CS1
-#define DISPLAY_SPI_CS2_PIN      GPIO_NUM_16  // FPC2 右眼，原理图 IO16_LCD_CS2
+#define DISPLAY_SPI_CS1_PIN      GPIO_NUM_16  // FPC3 左眼，网名 IO16_LCD_CS1
+#define DISPLAY_SPI_CS2_PIN      GPIO_NUM_17  // FPC1 右眼，网名 IO17_LCD_CS2
 #define DISPLAY_SPI_RESET_PIN    GPIO_NUM_NC
 #define DISPLAY_SPI_SCLK_HZ      (10 * 1000 * 1000)
 #define DISPLAY_SPI_HOST         SPI2_HOST
-#define DISPLAY_BACKLIGHT_PIN    GPIO_NUM_42
-// IO42 → 1k → SI2301 门极（10k 上拉 3V3）：低电平点亮
+#define DISPLAY_BACKLIGHT_PIN    GPIO_NUM_15
+// GPIO15 → 1k → SI2301 门极（10k 上拉 3V3），两只眼共用。低电平点亮。
 #define DISPLAY_BACKLIGHT_OUTPUT_INVERTED true
 #define DISPLAY_INVERT_COLOR     false
 #define DISPLAY_MIRROR_X         false
@@ -79,7 +79,7 @@
 #define TOUCH_TIMEOUT_RAW        80000
 
 #define WS2812_DIN_GPIO          GPIO_NUM_3
-#define WS2812_EN_GPIO           GPIO_NUM_15  // LED_EN，高电平给灯带供电
+#define WS2812_EN_GPIO           GPIO_NUM_42  // 模组脚 35 LED_EN，高电平给灯带供电
 #define WS2812_LED_COUNT         2
 // 原理图仅一路舵机 CN2（PH 3P）：1=GND，2=SE_PWMO=GPIO8，3=5V 经 D5。
 // 型号 MG90S：50Hz，脉宽约 0.5–2.5ms 对应 0–180°。背光占用 LEDC T0/CH0，舵机用 T1/CH1。
@@ -95,7 +95,10 @@
 #define SERVO_MAX_DEG            180
 #define SERVO_CENTER_DEG         90
 #define SERVO_TRACK_SPAN_DEG     45    // 跟随限幅：中位 ±45°
-#define SERVO_PAN_INVERT         0     // 1=人脸在左时舵机反转
+// 扭头跟随看 K230 pose.yaw，不看画面里的人脸位置。
+// yaw>0 且 dir=right 表示脑袋往右。实机再镜像一次后，舵机角度增大（大于 90°）。
+// 1=机械安装左右反了，语音点动和扭头跟随一起再翻一次。
+#define SERVO_PAN_INVERT         0
 #define SERVO_SLEW_DEG_PER_S     80
 #define SERVO_FACE_LOST_MS       800
 #define SERVO_DEADZONE           0.08f
@@ -123,8 +126,9 @@
 #define USB_DPLUS_GPIO           GPIO_NUM_20
 // U4 模组横出 640×480，安装后画面横置。1=顺时针 90°，3=顺时针 270°，0=不转。
 #define CAMERA_ROTATE_90         1
+// 1=上传相机原始 JPEG，不解码、不旋转、不重压。0=按 CAMERA_ROTATE_90 转正后再压。
+#define CAMERA_UPLOAD_ORIGINAL   1
 
-// 空闲脚，改版建议把 PA_EN 改到其中之一
 #define UNUSED_GPIO_9            GPIO_NUM_9
 #define UNUSED_GPIO_21           GPIO_NUM_21
 
