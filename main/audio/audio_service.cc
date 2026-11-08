@@ -181,7 +181,8 @@ void AudioService::Stop() {
     audio_queue_cv_.notify_all();
 }
 
-void AudioService::SuspendVoiceInput(bool suspend) {
+void AudioService::SuspendVoiceInput(bool suspend, bool release_codec) {
+    if (suspend) suspend_releases_codec_.store(release_codec);
     voice_input_suspended_.store(suspend);
     if (!suspend) {
         return;
@@ -196,7 +197,7 @@ void AudioService::SuspendVoiceInput(bool suspend) {
 
 bool AudioService::ReadAudioData(std::vector<int16_t>& data, int sample_rate, int samples) {
     if (voice_input_suspended_.load()) {
-        if (codec_->input_enabled()) {
+        if (suspend_releases_codec_.load() && codec_->input_enabled()) {
             codec_->EnableInput(false);
         }
         return false;
@@ -249,7 +250,7 @@ bool AudioService::ReadAudioData(std::vector<int16_t>& data, int sample_rate, in
 void AudioService::AudioInputTask() {
     while (true) {
         if (voice_input_suspended_.load()) {
-            if (codec_ != nullptr && codec_->input_enabled()) {
+            if (suspend_releases_codec_.load() && codec_ != nullptr && codec_->input_enabled()) {
                 codec_->EnableInput(false);
             }
             vTaskDelay(pdMS_TO_TICKS(20));
@@ -793,6 +794,8 @@ uint32_t AudioService::PlayedMusicFrames(uint32_t generation) {
 }
 
 void AudioService::CheckAndUpdateAudioPowerState() {
+    // 摄像头仅暂停算法送入时必须维持双工时钟，不能被空闲定时器关掉。
+    if (voice_input_suspended_.load() && !suspend_releases_codec_.load()) return;
     auto now = std::chrono::steady_clock::now();
     auto input_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_input_time_).count();
     auto output_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_output_time_).count();

@@ -971,10 +971,25 @@ void Application::HandleWakeWordDetectedEvent() {
         // Channel already opened, continue directly
         ContinueWakeWordInvoke(wake_word);
     } else if (state == kDeviceStateListening) {
-        // 聆听中再说唤醒词：结束会话，回到待命。检测回调自己已经停掉唤醒词。
+#if CONFIG_BOARD_TYPE_AIPET_ESP32_S3_USB_CAM
+        // S3 摄像头板：再次唤醒是恢复聆听，不应把用户挂断。
+        ESP_LOGI(TAG, "wake while listening: restart listening without closing session");
+        audio_service_.SuspendVoiceInput(false);
+        audio_service_.EnableVoiceProcessing(true);
+        audio_service_.EnableWakeWordDetection(true);
+        if (protocol_->IsAudioChannelOpened()) {
+            // detect 触发服务端唤醒应答，只有 start 会被当作普通聆听而不回应。
+            protocol_->SendWakeWordDetected(wake_word);
+            protocol_->SendStartListening(GetDefaultListeningMode());
+        } else {
+            ContinueWakeWordInvoke(wake_word);
+        }
+#else
+        // 其他板型保留原有再次唤醒结束会话的交互。
         if (protocol_->IsAudioChannelOpened()) {
             protocol_->CloseAudioChannel();
         }
+#endif
     } else if (state == kDeviceStateSpeaking) {
         AbortSpeaking(kAbortReasonWakeWordDetected);
         // Clear send queue to avoid sending residues to server

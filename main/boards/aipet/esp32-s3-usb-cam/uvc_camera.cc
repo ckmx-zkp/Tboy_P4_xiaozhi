@@ -15,6 +15,7 @@
 
 #include <esp_heap_caps.h>
 #include <esp_log.h>
+#include <esp_timer.h>
 #include <freertos/task.h>
 #include <usb/usb_host.h>
 
@@ -24,6 +25,17 @@
 #define OPEN_WAIT_MS 8000
 #define BURST_FRAMES 1
 #define BURST_SCAN_FRAMES 4
+
+namespace {
+struct VoiceInputPause {
+    VoiceInputPause() {
+        Application::GetInstance().GetAudioService().SuspendVoiceInput(true, false);
+    }
+    ~VoiceInputPause() {
+        Application::GetInstance().GetAudioService().SuspendVoiceInput(false);
+    }
+};
+}  // namespace
 
 UvcCamera::UvcCamera() {
     ESP_LOGI(TAG, "U4 UVC camera D-=GPIO%d D+=GPIO%d", USB_DMINUS_GPIO, USB_DPLUS_GPIO);
@@ -61,7 +73,9 @@ bool UvcCamera::SetVFlip(bool enabled) {
 
 bool UvcCamera::FrameCallback(const uvc_host_frame_t* frame, void* user_ctx) {
     auto self = static_cast<UvcCamera*>(user_ctx);
-    if (xQueueSendToBack(self->frame_q_, &frame, 0) != pdPASS) {
+    ++self->received_frames_;
+    if (!self->accepting_frames_.load() ||
+        xQueueSendToBack(self->frame_q_, &frame, 0) != pdPASS) {
         return true;
     }
     return false;
@@ -76,10 +90,33 @@ void UvcCamera::StreamCallback(const uvc_host_stream_event_data_t* event, void* 
         case UVC_HOST_DEVICE_DISCONNECTED:
             self->disconnected_ = true;
             ESP_LOGW(TAG, "UVC device disconnected");
-            uvc_host_stream_close(event->device_disconnected.stream_hdl);
+            // 由拍照任务归还排队帧后统一关闭，回调不得提前释放流。
+            break;
+        case UVC_HOST_FRAME_BUFFER_OVERFLOW:
+            ++self->overflow_frames_;
+            break;
+        case UVC_HOST_FRAME_BUFFER_UNDERFLOW:
+            ESP_LOGW(TAG, "UVC frame queue exhausted");
             break;
         default:
             break;
+    }
+}
+
+void UvcCamera::DriverCallback(const uvc_host_driver_event_data_t* event, void* user_ctx) {
+    (void)user_ctx;
+    if (event->type != UVC_HOST_DRIVER_EVENT_DEVICE_CONNECTED) return;
+    const auto& dev = event->device_connected;
+    size_t count = dev.frame_info_num;
+    if (count == 0 || count > 64) return;
+    std::vector<uvc_host_frame_info_t> frames(count);
+    if (uvc_host_get_frame_list(dev.dev_addr, dev.uvc_stream_index,
+        reinterpret_cast<uvc_host_frame_info_t (*)[]>(frames.data()), &count) != ESP_OK) return;
+    for (size_t i = 0; i < count; ++i) {
+        const auto& info = frames[i];
+        ESP_LOGI(TAG, "camera format=%d %ux%u interval=%lu (100ns) default_fps=%.2f",
+                 info.format, info.h_res, info.v_res, (unsigned long)info.default_interval,
+                 info.default_interval ? 10000000.f / info.default_interval : 0.f);
     }
 }
 
@@ -113,16 +150,18 @@ bool UvcCamera::EnsureHost() {
     ESP_LOGI(TAG, "USB Host installed early, internal PHY");
 
     if (xTaskCreatePinnedToCore(UsbLibTask, "usb_lib", 4096, nullptr,
-                                USB_HOST_TASK_PRIO, nullptr, tskNO_AFFINITY) != pdPASS) {
+                                USB_HOST_TASK_PRIO, nullptr, 1) != pdPASS) {
         ESP_LOGE(TAG, "usb_lib task create failed");
         return false;
     }
 
     const uvc_host_driver_config_t uvc_cfg = {
         .driver_task_stack_size = 4 * 1024,
-        .driver_task_priority = USB_HOST_TASK_PRIO + 1,
-        .xCoreID = tskNO_AFFINITY,
+        .driver_task_priority = USB_HOST_TASK_PRIO - 1,
+        .xCoreID = 1,
         .create_background_task = true,
+        .event_cb = DriverCallback,
+        .user_ctx = this,
     };
     err = uvc_host_install(&uvc_cfg);
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
@@ -159,15 +198,11 @@ bool UvcCamera::ExtractJpeg(const uint8_t* data, size_t len, std::vector<uint8_t
             break;
         }
     }
-    if (end == SIZE_MAX || end - start < 4096) {
+    if (end == SIZE_MAX || end - start < 128) {
         return false;
     }
     out.assign(data + start, data + end);
     return true;
-}
-
-void UvcCamera::PauseMic(bool pause) {
-    Application::GetInstance().GetAudioService().SuspendVoiceInput(pause);
 }
 
 void UvcCamera::StripThinkTags(std::string& text) {
@@ -297,7 +332,8 @@ bool UvcCamera::CaptureFormat(uint16_t w, uint16_t h, float fps, int urb_count, 
     cfg.vs_format.v_res = h;
     cfg.vs_format.fps = fps;
     cfg.vs_format.format = UVC_VS_FORMAT_MJPEG;
-    cfg.advanced.frame_size = 0;
+    // 部分摄像头上报的最大帧尺寸不可靠，JPEG 缓冲放 PSRAM。
+    cfg.advanced.frame_size = 256 * 1024;
     cfg.advanced.number_of_frame_buffers = 3;
     cfg.advanced.number_of_urbs = urb_count;
     cfg.advanced.urb_size = urb_size;
@@ -315,9 +351,15 @@ bool UvcCamera::CaptureFormat(uint16_t w, uint16_t h, float fps, int urb_count, 
         return false;
     }
 
-    // 重新挂上 disconnect 回调的 this
-    // stream 已打开；用独立成员 disconnected_
+    uvc_host_stream_format_t negotiated = {};
+    uvc_host_stream_format_get(stream, &negotiated);
+    ESP_LOGI(TAG, "stream negotiated %ux%u fps=%.2f frame_capacity=262144 urb=%d x %u",
+             negotiated.h_res, negotiated.v_res, negotiated.fps, urb_count, (unsigned)urb_size);
+    received_frames_ = 0;
+    overflow_frames_ = 0;
+    accepting_frames_ = true;
     if (uvc_host_stream_start(stream) != ESP_OK) {
+        accepting_frames_ = false;
         uvc_host_stream_close(stream);
         return false;
     }
@@ -333,16 +375,27 @@ bool UvcCamera::CaptureFormat(uint16_t w, uint16_t h, float fps, int urb_count, 
         const bool have_jpeg = frame->data &&
                                ExtractJpeg(static_cast<const uint8_t*>(frame->data),
                                            frame->data_len, one);
+        ESP_LOGI(TAG, "frame bytes=%u capacity=%u jpeg_valid=%d",
+                 (unsigned)frame->data_len, (unsigned)frame->data_buffer_len, have_jpeg);
         uvc_host_frame_return(stream, frame);
         if (have_jpeg) {
             burst.push_back(std::move(one));
         }
     }
 
+    accepting_frames_ = false;
     if (!disconnected_) {
-        uvc_host_stream_stop(stream);
-        uvc_host_stream_close(stream);
+        ESP_ERROR_CHECK_WITHOUT_ABORT(uvc_host_stream_stop(stream));
     }
+    // stop 后仍可能有回调已投递的帧；必须全部归还才能关闭流。
+    uvc_host_frame_t* queued = nullptr;
+    while (xQueueReceive(frame_q_, &queued, 0) == pdPASS) {
+        ESP_ERROR_CHECK_WITHOUT_ABORT(uvc_host_frame_return(stream, queued));
+    }
+    const esp_err_t close_err = uvc_host_stream_close(stream);
+    ESP_LOGI(TAG, "stream stopped received=%u overflow=%u close=%s",
+             received_frames_.load(), overflow_frames_.load(), esp_err_to_name(close_err));
+    if (close_err != ESP_OK) return false;
     if (burst.empty()) {
         ESP_LOGW(TAG, "no complete JPEG at %ux%u", w, h);
         return false;
@@ -390,9 +443,9 @@ bool UvcCamera::Capture() {
     std::lock_guard<std::mutex> lock(mutex_);
     burst_count_ = 0;
     jpeg_.clear();
-    PauseMic(true);
+    // 暂停 AFE 送入但保持 I2S 开启；异常返回也自动恢复。
+    VoiceInputPause voice_pause;
     if (!EnsureHost()) {
-        PauseMic(false);
         return false;
     }
 
@@ -407,13 +460,12 @@ bool UvcCamera::Capture() {
     }
     if (info.num_devices <= 0) {
         ESP_LOGE(TAG, "no USB device on U4");
-        PauseMic(false);
         return false;
     }
 
     // URB 数据缓冲必须在内部 DMA。对话中这块堆经常拼不出连续 10KB，
     // 固定 3×10KB 会在开流第一块分配上失败。按当前最大空闲块从大到小试。
-    const uint32_t dma_caps = MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL | MALLOC_CAP_CACHE_ALIGNED;
+    const uint32_t dma_caps = MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL;
     const size_t largest = heap_caps_get_largest_free_block(dma_caps);
     ESP_LOGI(TAG, "usb dma free=%u largest=%u",
              static_cast<unsigned>(heap_caps_get_free_size(dma_caps)),
@@ -452,7 +504,6 @@ bool UvcCamera::Capture() {
     }
     if (nplans == 0) {
         ESP_LOGE(TAG, "no internal DMA for USB URB, largest=%u", static_cast<unsigned>(largest));
-        PauseMic(false);
         return false;
     }
 
@@ -461,10 +512,9 @@ bool UvcCamera::Capture() {
         uint16_t h;
         float fps;
     } formats[] = {
-        {640, 480, 15},
         {640, 480, 0},
-        {320, 240, 15},
-        {160, 120, 15},
+        {320, 240, 0},
+        {160, 120, 0},
     };
     for (int p = 0; p < nplans; ++p) {
         ESP_LOGI(TAG, "try urb %d x %u", plans[p].count, static_cast<unsigned>(plans[p].size));
@@ -477,6 +527,10 @@ bool UvcCamera::Capture() {
                          jpeg_[0], jpeg_[1], jpeg_[2]);
                 return true;
             }
+            if (open_err == ESP_ERR_TIMEOUT) {
+                ESP_LOGE(TAG, "camera control timeout; abort capture without restarting audio");
+                return false;
+            }
             if (open_err == ESP_ERR_NO_MEM) {
                 no_mem = true;
                 break;
@@ -487,18 +541,16 @@ bool UvcCamera::Capture() {
         }
     }
     ESP_LOGE(TAG, "UVC capture failed");
-    PauseMic(false);
     return false;
 }
 
 std::string UvcCamera::Explain(const std::string& question) {
     std::lock_guard<std::mutex> lock(mutex_);
+    VoiceInputPause voice_pause;
     if (explain_url_.empty()) {
-        PauseMic(false);
         throw std::runtime_error("Image explain URL is not set");
     }
     if (jpeg_.empty()) {
-        PauseMic(false);
         throw std::runtime_error("No camera frame captured");
     }
 
@@ -506,6 +558,8 @@ std::string UvcCamera::Explain(const std::string& question) {
     auto http = network->CreateHttp(3);
     std::string boundary = "----ESP32_CAMERA_BOUNDARY";
 
+    http->SetTimeout(20000);
+    ESP_LOGI(TAG, "upload start jpeg=%u", (unsigned)jpeg_.size());
     http->SetHeader("Device-Id", SystemInfo::GetMacAddress().c_str());
     http->SetHeader("Client-Id", Board::GetInstance().GetUuid().c_str());
     if (!explain_token_.empty()) {
@@ -514,7 +568,6 @@ std::string UvcCamera::Explain(const std::string& question) {
     http->SetHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
     http->SetHeader("Transfer-Encoding", "chunked");
     if (!http->Open("POST", explain_url_)) {
-        PauseMic(false);
         throw std::runtime_error("Failed to connect to explain URL");
     }
 
@@ -524,23 +577,29 @@ std::string UvcCamera::Explain(const std::string& question) {
     question_field += "--" + boundary + "\r\n";
     question_field += "Content-Disposition: form-data; name=\"question\"\r\n\r\n";
     question_field += ask + "\r\n";
-    http->Write(question_field.c_str(), question_field.size());
+    auto write_all = [&http](const char* data, size_t size) {
+        const int written = http->Write(data, size);
+        if (written < 0 || static_cast<size_t>(written) < size) {
+            http->Close();
+            throw std::runtime_error("Photo upload write failed");
+        }
+    };
+    write_all(question_field.c_str(), question_field.size());
 
     std::string file_header;
     file_header += "--" + boundary + "\r\n";
     file_header += "Content-Disposition: form-data; name=\"file\"; filename=\"camera.jpg\"\r\n";
     file_header += "Content-Type: image/jpeg\r\n\r\n";
-    http->Write(file_header.c_str(), file_header.size());
-    http->Write(reinterpret_cast<const char*>(jpeg_.data()), jpeg_.size());
+    write_all(file_header.c_str(), file_header.size());
+    write_all(reinterpret_cast<const char*>(jpeg_.data()), jpeg_.size());
 
     std::string footer = "\r\n--" + boundary + "--\r\n";
-    http->Write(footer.c_str(), footer.size());
+    write_all(footer.c_str(), footer.size());
     http->Write("", 0);
 
     const int status = http->GetStatusCode();
     std::string result = http->ReadAll();
     http->Close();
-    PauseMic(false);
     StripThinkTags(result);
     ESP_LOGI(TAG, "explain HTTP %d jpeg=%u frames=%d q=%s result=%s", status,
              static_cast<unsigned>(jpeg_.size()), burst_count_, ask.c_str(), result.c_str());

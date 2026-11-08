@@ -35,25 +35,25 @@
 #define USER_BUTTON_GPIO         GPIO_NUM_4   // SW3 / KEY1
 
 // 双眼 XJ0.99TFT-12P / GC9107，4-line SPI；资料 hardware/XJ0.99TFT-12P/
-// 资料写玻璃 128×115，IC GRAM 固定 128×160。圆屏实际能看到整段 160 行；
-// 只刷 115 行会下半花屏，115 贴顶会偏上，放大到 160 高会顶边显大。
-// 资产：128×128 圆眼贴进 128×160，落在第 26–154 行。视线平移 8px。
-// 送屏再往右 6px、往下 8px，补玻璃开孔偏左上。
+// 芯片支持多种硬件行模式；当前圆屏按 128×128 窗口发送，不能强刷 160 行。
+// 资产仍为 128×160，渲染时以 (64,90) 取样，缩放跨度 132（亮部约 128 像素）并居中。
 // RES 与 ESP EN 短接，软件不再单独复位。
 #define DISPLAY_WIDTH            128
-#define DISPLAY_HEIGHT           160
-#define DISPLAY_GRAM_HEIGHT      160
-// 09-13 原理图：FPC9 SCL→IO40_LCD_MOSI，FPC10 SDA→IO41_LCD_SCK（网表名与玻璃脚对反）
+#define DISPLAY_HEIGHT           128
+#define DISPLAY_GRAM_HEIGHT      128
+// SCH_Schematic1 2026-10-16：网名仍和玻璃脚对反。
+// FPC SCL 接到 GPIO40（网名 IO40_LCD_MOSI），SDA 接到 GPIO41（网名 IO41_LCD_SCK）。
+// 软件按玻璃脚接线，不按网表名。
 #define DISPLAY_SPI_SCLK_PIN     GPIO_NUM_40
 #define DISPLAY_SPI_MOSI_PIN     GPIO_NUM_41
 #define DISPLAY_SPI_DC_PIN       GPIO_NUM_39
-#define DISPLAY_SPI_CS1_PIN      GPIO_NUM_17  // FPC5 左眼，原理图 IO17_LCD_CS1
-#define DISPLAY_SPI_CS2_PIN      GPIO_NUM_16  // FPC2 右眼，原理图 IO16_LCD_CS2
+#define DISPLAY_SPI_CS1_PIN      GPIO_NUM_16  // FPC3 左眼，网名 IO16_LCD_CS1
+#define DISPLAY_SPI_CS2_PIN      GPIO_NUM_17  // FPC1 右眼，网名 IO17_LCD_CS2
 #define DISPLAY_SPI_RESET_PIN    GPIO_NUM_NC
 #define DISPLAY_SPI_SCLK_HZ      (10 * 1000 * 1000)
 #define DISPLAY_SPI_HOST         SPI2_HOST
-#define DISPLAY_BACKLIGHT_PIN    GPIO_NUM_42
-// IO42 → 1k → SI2301 门极（10k 上拉 3V3）：低电平点亮
+#define DISPLAY_BACKLIGHT_PIN    GPIO_NUM_15
+// GPIO15 → 1k → SI2301 门极（10k 上拉 3V3），两只眼共用。低电平点亮。
 #define DISPLAY_BACKLIGHT_OUTPUT_INVERTED true
 #define DISPLAY_INVERT_COLOR     false
 #define DISPLAY_MIRROR_X         false
@@ -79,7 +79,7 @@
 #define TOUCH_TIMEOUT_RAW        80000
 
 #define WS2812_DIN_GPIO          GPIO_NUM_3
-#define WS2812_EN_GPIO           GPIO_NUM_15  // LED_EN，高电平给灯带供电
+#define WS2812_EN_GPIO           GPIO_NUM_42  // 模组脚 35 LED_EN，高电平给灯带供电
 #define WS2812_LED_COUNT         2
 // 原理图仅一路舵机 CN2（PH 3P）：1=GND，2=SE_PWMO=GPIO8，3=5V 经 D5。
 // 型号 MG90S：50Hz，脉宽约 0.5–2.5ms 对应 0–180°。背光占用 LEDC T0/CH0，舵机用 T1/CH1。

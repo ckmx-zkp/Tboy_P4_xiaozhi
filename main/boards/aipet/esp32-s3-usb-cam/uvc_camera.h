@@ -3,6 +3,7 @@
 
 #include "camera.h"
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -36,7 +37,7 @@ private:
     static bool ComposeBurstJpeg(const std::vector<std::vector<uint8_t>>& frames,
                                  std::vector<uint8_t>& out, uint16_t* out_w, uint16_t* out_h);
     static void StripThinkTags(std::string& text);
-    static void PauseMic(bool pause);
+    static void DriverCallback(const uvc_host_driver_event_data_t* event, void* user_ctx);
     static bool FrameCallback(const uvc_host_frame_t* frame, void* user_ctx);
     static void StreamCallback(const uvc_host_stream_event_data_t* event, void* user_ctx);
     static void UsbLibTask(void* arg);
@@ -49,7 +50,10 @@ private:
     uint16_t height_ = 0;
     int burst_count_ = 0;
     QueueHandle_t frame_q_ = nullptr;
-    volatile bool disconnected_ = false;
+    std::atomic<bool> disconnected_{false};
+    std::atomic<bool> accepting_frames_{false};
+    std::atomic<unsigned> received_frames_{0};
+    std::atomic<unsigned> overflow_frames_{0};
     bool host_ready_ = false;
 };
 #endif

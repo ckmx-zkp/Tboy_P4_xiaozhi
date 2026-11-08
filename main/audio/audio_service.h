@@ -125,7 +125,8 @@ public:
     void EnableWakeWordDetection(bool enable);
     void EnableVoiceProcessing(bool enable, bool reset_decoder = true);
     // 拍照/上传期间停掉麦克风读取。采集任务不会把输入重新打开。
-    void SuspendVoiceInput(bool suspend);
+    // release_codec=false 仅暂停送入语音算法，保留共享 I2S 硬件。
+    void SuspendVoiceInput(bool suspend, bool release_codec = true);
     void EnableAudioTesting(bool enable);
     void EnableDeviceAec(bool enable);
 
@@ -196,6 +197,7 @@ private:
     bool service_stopped_ = true;
     bool audio_input_need_warmup_ = false;
     std::atomic<bool> voice_input_suspended_{false};
+    std::atomic<bool> suspend_releases_codec_{true};
 
     esp_timer_handle_t audio_power_timer_ = nullptr;
     std::chrono::steady_clock::time_point last_input_time_;

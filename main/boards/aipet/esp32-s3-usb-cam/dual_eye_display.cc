@@ -33,16 +33,24 @@ EYE_ASSET(eye_blink_closed_bin)
 namespace {
 constexpr int kFps = 12;
 constexpr int kGazeShift = 8;
-// 玻璃开孔相对 GRAM 偏左上。正值把画面往右、往下移，左右眼方向一致。
-constexpr int kPanelBiasX = 6;
-constexpr int kPanelBiasY = 8;
+// 资产仍为 128×160；送屏窗口独立为 128×128，禁止把多余 32 行写入圆屏。
+constexpr int kAssetWidth = 128;
+constexpr int kAssetHeight = 160;
+constexpr int kSrcCx = 64;
+constexpr int kSrcCy = 90;
+constexpr int kDstCx = 64;
+constexpr int kDstCy = 64;
+// 素材亮部直径约 124px；缩放跨度 132 让亮部约 128px，贴合圆屏。
+constexpr int kSrcSpan = 128;
+constexpr int kDstSpan = 132;
 constexpr int kBlinkSeq[] = {0, 1, 2, 1};
 constexpr int kBlinkSeqLen = 4;
 }  // namespace
 
 DualEyeDisplay::DualEyeDisplay(esp_lcd_panel_handle_t left, esp_lcd_panel_handle_t right,
-                               int width, int height)
-    : left_(left), right_(right), width_(width), height_(height) {
+                               int width, int height,
+                               esp_lcd_panel_io_handle_t left_io, esp_lcd_panel_io_handle_t right_io)
+    : left_(left), right_(right), left_io_(left_io), right_io_(right_io), width_(width), height_(height) {
     fb_bytes_ = (size_t)width_ * height_ * sizeof(uint16_t);
     fb_ = static_cast<uint16_t*>(heap_caps_malloc(fb_bytes_, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
     if (fb_ == nullptr) {
@@ -60,7 +68,7 @@ DualEyeDisplay::DualEyeDisplay(esp_lcd_panel_handle_t left, esp_lcd_panel_handle
     running_ = true;
     last_emotion_us_ = esp_timer_get_time();
     xTaskCreatePinnedToCore(AnimTask, "s3_eyes", 4096, this, 3, &task_, 1);
-    ESP_LOGI(TAG, "dual eyes %dx%d (full GRAM) left=mirror right=original assets=%d",
+    ESP_LOGI(TAG, "dual eyes %dx%d window; asset=128x160 eye_span=132 center=(64,64) left=mirror assets=%d",
              width_, height_, use_assets_ ? 1 : 0);
 }
 
@@ -82,8 +90,9 @@ DualEyeDisplay::~DualEyeDisplay() {
 
 bool DualEyeDisplay::LoadFrame(const uint8_t* start, const uint8_t* end, const uint16_t** out) {
     size_t n = (size_t)(end - start);
-    if (n < fb_bytes_) {
-        ESP_LOGE(TAG, "eye frame %u < %u", (unsigned)n, (unsigned)fb_bytes_);
+    constexpr size_t asset_bytes = kAssetWidth * kAssetHeight * sizeof(uint16_t);
+    if (n != asset_bytes) {
+        ESP_LOGE(TAG, "eye frame %u != %u", (unsigned)n, (unsigned)asset_bytes);
         return false;
     }
     *out = reinterpret_cast<const uint16_t*>(start);
@@ -314,43 +323,47 @@ void DualEyeDisplay::SetAutoIdle(bool on) {
 }
 
 void DualEyeDisplay::PackBe(const uint16_t* src, bool mirror, int dx, int dy) {
-    // 右眼资产原样。左眼先镜像。视线偏移沿用原方向；开孔校正按玻璃的右、下。
+    // 右眼资产原样。左眼先镜像。视线偏移沿用原方向。
+    // 素材坐标与显示窗口分开，等比缩小；窗口外保持黑色。
     for (int y = 0; y < height_; ++y) {
         for (int x = 0; x < width_; ++x) {
-            int sx = mirror ? (width_ - 1 - x) : x;
-            int sy = y;
-            sx -= dx;
-            sy -= dy;
-            sx += mirror ? kPanelBiasX : -kPanelBiasX;
-            sy -= kPanelBiasY;
+            int xd = mirror ? (width_ - 1 - x) : x;
+            int yd = y;
+            xd -= dx;
+            yd -= dy;
+            const int sx = kSrcCx + (xd - kDstCx) * kSrcSpan / kDstSpan;
+            const int sy = kSrcCy + (yd - kDstCy) * kSrcSpan / kDstSpan;
             uint16_t v = 0;
-            if (sx >= 0 && sx < width_ && sy >= 0 && sy < height_) {
-                v = src[sy * width_ + sx];
+            if (sx >= 0 && sx < kAssetWidth && sy >= 0 && sy < kAssetHeight) {
+                v = src[sy * kAssetWidth + sx];
             }
             fb_[y * width_ + x] = static_cast<uint16_t>((v >> 8) | (v << 8));
         }
     }
 }
 
-bool DualEyeDisplay::DrawFb(esp_lcd_panel_handle_t panel) {
+bool DualEyeDisplay::DrawFb(esp_lcd_panel_handle_t panel, esp_lcd_panel_io_handle_t io) {
     if (panel == nullptr) {
         return false;
     }
     if (esp_lcd_panel_draw_bitmap(panel, 0, 0, width_, height_, fb_) != ESP_OK) {
         return false;
     }
-    // 排空异步 SPI，再画另一只眼 / 释放
-    return esp_lcd_panel_invert_color(panel, DISPLAY_INVERT_COLOR) == ESP_OK;
+    // IDF SPI 的 tx_param 会先排空 DMA；负命令不发送寄存器指令。
+    // 等待完成后才能复用同一帧缓冲，避免镜像数据覆盖尚未发完的右眼。
+    return esp_lcd_panel_io_tx_param(io, -1, nullptr, 0) == ESP_OK;
 }
 
-void DualEyeDisplay::FlushBoth(const uint16_t* src) {
+bool DualEyeDisplay::FlushBoth(const uint16_t* src) {
     if (fb_ == nullptr || src == nullptr || !use_assets_) {
-        return;
+        return false;
     }
     PackBe(src, false, gaze_dx_, gaze_dy_);
-    DrawFb(right_);
+    const bool right_ok = DrawFb(right_, right_io_);
     PackBe(src, true, gaze_dx_, gaze_dy_);
-    DrawFb(left_);
+    const bool left_ok = DrawFb(left_, left_io_);
+    if (!right_ok || !left_ok) ESP_LOGW(TAG, "flush failed left=%d right=%d", left_ok, right_ok);
+    return right_ok && left_ok;
 }
 
 void DualEyeDisplay::AnimTask(void* arg) {
@@ -365,6 +378,11 @@ void DualEyeDisplay::AnimLoop() {
     const float dt = 1.f / kFps;
     int blink_hold = 0;
     uint32_t tick = 0;
+    const uint16_t* last_src = nullptr;
+    int last_dx = 0;
+    int last_dy = 0;
+    int64_t last_flush_us = 0;
+    int64_t blink_started_us = 0;
 
     while (running_) {
         const DeviceState state = Application::GetInstance().GetDeviceState();
@@ -394,6 +412,16 @@ void DualEyeDisplay::AnimLoop() {
             xSemaphoreGive(mutex_);
         }
 
+        if (blink_step_ >= 0) {
+            if (blink_started_us == 0) blink_started_us = now;
+            if (now - blink_started_us > 800000) {
+                ESP_LOGW(TAG, "blink deadline exceeded; restore open frame");
+                blink_step_ = -1;
+                blink_started_us = 0;
+            }
+        } else {
+            blink_started_us = 0;
+        }
         const uint16_t* src = nullptr;
         if (closed) {
             src = frame_closed_;
@@ -443,7 +471,15 @@ void DualEyeDisplay::AnimLoop() {
             }
         }
 
-        FlushBoth(src);
+        if (src != last_src || gaze_dx_ != last_dx || gaze_dy_ != last_dy ||
+            now - last_flush_us >= 1000000) {
+            if (FlushBoth(src)) {
+                last_src = src;
+                last_dx = gaze_dx_;
+                last_dy = gaze_dy_;
+                last_flush_us = now;
+            }
+        }
 
         if ((tick++ % 48) == 0) {
             ESP_LOGI(TAG, "emotion=%s blink=%d gaze=(%d,%d) closed=%d",

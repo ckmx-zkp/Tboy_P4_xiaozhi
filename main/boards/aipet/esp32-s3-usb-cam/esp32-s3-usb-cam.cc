@@ -65,6 +65,8 @@ private:
     Mg90sServo servo_;
     FaceFollowController* follow_ = nullptr;
     ServoController* servo_ctrl_ = nullptr;
+    esp_lcd_panel_io_handle_t left_eye_io_ = nullptr;
+    esp_lcd_panel_io_handle_t right_eye_io_ = nullptr;
     esp_lcd_panel_handle_t left_eye_ = nullptr;
     esp_lcd_panel_handle_t right_eye_ = nullptr;
 
@@ -298,8 +300,7 @@ private:
         return true;
     }
 
-    esp_lcd_panel_handle_t CreateGc9107Eye(gpio_num_t cs) {
-        esp_lcd_panel_io_handle_t io = nullptr;
+    esp_lcd_panel_handle_t CreateGc9107Eye(gpio_num_t cs, esp_lcd_panel_io_handle_t& io) {
         esp_lcd_panel_io_spi_config_t io_cfg = {};
         io_cfg.cs_gpio_num = cs;
         io_cfg.dc_gpio_num = DISPLAY_SPI_DC_PIN;
@@ -348,15 +349,17 @@ private:
         if (!InitializeEyeSpi()) {
             return;
         }
-        left_eye_ = CreateGc9107Eye(DISPLAY_SPI_CS1_PIN);
-        right_eye_ = CreateGc9107Eye(DISPLAY_SPI_CS2_PIN);
+        left_eye_ = CreateGc9107Eye(DISPLAY_SPI_CS1_PIN, left_eye_io_);
+        right_eye_ = CreateGc9107Eye(DISPLAY_SPI_CS2_PIN, right_eye_io_);
         if (left_eye_ == nullptr || right_eye_ == nullptr) {
             ESP_LOGE(TAG, "GC9107 eyes missing, skip C1 animation");
             return;
         }
-        eyes_ = new DualEyeDisplay(left_eye_, right_eye_, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+        eyes_ = new DualEyeDisplay(left_eye_, right_eye_, DISPLAY_WIDTH, DISPLAY_HEIGHT,
+                                   left_eye_io_, right_eye_io_);
         eye_ctrl_ = new EyeController(eyes_, led_mood_);
-        ESP_LOGI(TAG, "C1 dual eyes ready: right=original left=mirrored");
+        ESP_LOGI(TAG, "C1 dual eyes ready: left CS=GPIO%d mirrored, right CS=GPIO%d original, BL=GPIO%d",
+                 DISPLAY_SPI_CS1_PIN, DISPLAY_SPI_CS2_PIN, DISPLAY_BACKLIGHT_PIN);
     }
 
     bool OpenUart(uart_port_t port, gpio_num_t tx, gpio_num_t rx, int baud,
