@@ -55,7 +55,7 @@ public:
 
         mcp.AddTool(
             "self.eye.set_emotion",
-            "切换双眼表情，并同步两颗 WS2812 为同一心情色（P1 同轮联动）。"
+            "切换双眼表情，并同步六颗 WS2812 为同一心情色（P1 同轮联动）。"
             "用户说开心、高兴、生气、难过、兴奋、恢复正常、换表情时必须立刻调用。"
             "同一轮不必再调 self.led.set_emotion，除非只要灯不要换脸。"
             "emotion：neutral/happy/angry/sad/joy。云端人设 default_emotion 也走本工具。",

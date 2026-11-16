@@ -11,7 +11,7 @@
 | Kconfig | `BOARD_TYPE_AIPET_ESP32_S3_USB_CAM` |
 | 本目录 | `main/boards/aipet/esp32-s3-usb-cam/` |
 
-当前代码：WiFi + 音频 + 双眼 C1 + 两颗 WS2812。**P1**：`self.eye.set_emotion` 同轮改灯；`self.eye.set_blink_profile` 可调眨眼间隔。**当前嵌入皮肤=巨蟹座**（`image/zodiac/cancer`，128×160）。天蝎已验素材并烧过；双鱼已转好未嵌入。无运行时换皮肤。CN2 跟随代码仍在，舵机/触摸硬件未接。UART1 收 K230 JSON。4G 起板探测由 `BOARD_ENABLE_4G_TEST` 控制，**当前为 0**。MIC3 回采试验已撤回，参考通道仍是 MIC2。
+当前代码：WiFi + 音频 + 双眼 C1 + 六颗 WS2812。**P1**：`self.eye.set_emotion` 同轮改灯；`self.eye.set_blink_profile` 可调眨眼间隔。**当前嵌入皮肤=巨蟹座**（`image/zodiac/cancer`，128×160）。天蝎已验素材并烧过；双鱼已转好未嵌入。无运行时换皮肤。CN2 跟随代码仍在，舵机/触摸硬件未接。UART1 收 K230 JSON。4G 起板探测由 `BOARD_ENABLE_4G_TEST` 控制，**当前为 0**。MIC3 回采试验已撤回，参考通道仍是 MIC2。
 
 ## S3 GPIO 对照（模组脚 → 功能）
 
@@ -19,7 +19,7 @@
 |------|--------|------|----------|
 | 0 | IO0_BOOT | BOOT 键 SW2 | 已接：配网 / 开关对话 |
 | 1 | IO1_I2C_SDA | ES8311 0x18 + ES7210 0x41（驱动 8-bit `0x82`） | 已接，真机 ACK |
-| 3 | IO3_LED_OUT | WS2812 DIN（2 颗） | 已接；MCP `self.led.*` |
+| 3 | IO3_LED_OUT | WS2812 DIN（6 颗） | 已接；MCP `self.led.*` |
 | 4 | KEY1 | 用户键 SW3 | 仅宏 |
 | 5 / 6 / 7 | IO4/5/6_TOUCH* | 电容触摸 CN1（S3 TOUCH4/5/6） | `BOARD_ENABLE_TOUCH_TEST=1`，摸到打日志 |
 | 8 | SE_PWMO | 舵机 CN2 信号（MG90S，50Hz LEDC T1/CH1） | MCP `self.servo.turn_left/turn_right`；默认识别跟随 |
@@ -67,3 +67,9 @@
 - 持续日志：`logs/com25-live-20261109.log`；PowerShell 用 `Get-Content -Encoding UTF8 -Tail 50 -Wait` 查看。日志不提交仓库。
 
 - 本轮最终状态：用户确认对话恢复；USB 摄像头仍开流失败，暂存为已知问题，详见 `docs/USB摄像头已知问题-2026-11-09.md`。不登记拍照识别已通过。
+
+### 2026-11-16 六灯供电时序修正
+
+用户新图确认 LED_EN 经 R31=20kΩ、C33=4.7µF 驱动 Q9/Q10，RC 约 94ms。初始化改为拉高 GPIO42 后等待 1000ms，再创建灯带并发默认颜色。六颗共 144 个数据符号，当前板型显式分配 192 个 RMT 符号；其他板型保持原默认配置。清屏及本板使用的整帧写入检查返回值。现象：用户确认曾六灯全亮，随后全灭且复位不恢复；本改动修正已发现的初始化时序缺口，尚不能据此认定灭灯根因。
+
+验证：IDF 5.5.2 增量编译、COM7 应用烧录及哈希校验通过，ELF `a43416f67`。启动日志从 EN 拉高到默认颜色发送间隔 1000ms；用户确认此次六颗全亮。供电等待和 RMT 缓冲同时改动，未单独隔离因果；持续稳定性待观察。

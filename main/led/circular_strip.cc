@@ -7,7 +7,7 @@
 
 #define BLINK_INFINITE -1
 
-CircularStrip::CircularStrip(gpio_num_t gpio, uint16_t max_leds) : max_leds_(max_leds) {
+CircularStrip::CircularStrip(gpio_num_t gpio, uint16_t max_leds, size_t rmt_symbols) : max_leds_(max_leds) {
     // If the gpio is not connected, you should use NoLed class
     assert(gpio != GPIO_NUM_NC);
 
@@ -21,9 +21,10 @@ CircularStrip::CircularStrip(gpio_num_t gpio, uint16_t max_leds) : max_leds_(max
 
     led_strip_rmt_config_t rmt_config = {};
     rmt_config.resolution_hz = 10 * 1000 * 1000; // 10MHz
+    rmt_config.mem_block_symbols = rmt_symbols;
 
     ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip_));
-    led_strip_clear(led_strip_);
+    ESP_ERROR_CHECK(led_strip_clear(led_strip_));
 
     esp_timer_create_args_t strip_timer_args = {
         .callback = [](void *arg) {
@@ -73,9 +74,9 @@ void CircularStrip::SetMultiColors(const std::vector<StripColor>& colors) {
     int count = std::min(max_leds_, static_cast<int>(colors.size()));
     for (int i = 0; i < count; i++) {
         colors_[i] = colors[i];
-        led_strip_set_pixel(led_strip_, i, colors[i].red, colors[i].green, colors[i].blue);
+        ESP_ERROR_CHECK(led_strip_set_pixel(led_strip_, i, colors[i].red, colors[i].green, colors[i].blue));
     }
-    led_strip_refresh(led_strip_);
+    ESP_ERROR_CHECK(led_strip_refresh(led_strip_));
 }
 
 void CircularStrip::Blink(StripColor color, int interval_ms) {

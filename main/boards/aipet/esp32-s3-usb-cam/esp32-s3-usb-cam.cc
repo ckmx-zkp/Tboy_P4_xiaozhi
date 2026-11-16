@@ -77,10 +77,14 @@ private:
         io.pull_up_en = GPIO_PULLUP_DISABLE;
         io.pull_down_en = GPIO_PULLDOWN_DISABLE;
         io.intr_type = GPIO_INTR_DISABLE;
-        gpio_config(&io);
-        gpio_set_level(WS2812_EN_GPIO, 1);
-        led_strip_ = new CircularStrip(WS2812_DIN_GPIO, WS2812_LED_COUNT);
-        led_mood_ = new LedMoodController(led_strip_);
+        ESP_ERROR_CHECK(gpio_config(&io));
+        ESP_ERROR_CHECK(gpio_set_level(WS2812_EN_GPIO, 1));
+        // R31=20kΩ、C33=4.7µF，RC 约 94ms；等待供电开关稳定后再发送首帧。
+        ESP_LOGI(TAG, "LED_EN GPIO%d high; wait 1000ms for R31/C33 power enable", WS2812_EN_GPIO);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        // 六颗 RGB 共 144 个数据符号，加复位/结束符；整帧装入 RMT，避免中断续填。
+        led_strip_ = new CircularStrip(WS2812_DIN_GPIO, WS2812_LED_COUNT, 192);
+        led_mood_ = new LedMoodController(led_strip_, WS2812_LED_COUNT);
         ESP_LOGI(TAG, "WS2812 x%d DIN=GPIO%d EN=GPIO%d; MCP self.led.set_zodiac/set_emotion/off",
                  WS2812_LED_COUNT, WS2812_DIN_GPIO, WS2812_EN_GPIO);
     }

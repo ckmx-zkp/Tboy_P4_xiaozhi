@@ -18,7 +18,7 @@ struct StripColor {
 
 class CircularStrip : public Led {
 public:
-    CircularStrip(gpio_num_t gpio, uint16_t max_leds);
+    CircularStrip(gpio_num_t gpio, uint16_t max_leds, size_t rmt_symbols = 0);
     virtual ~CircularStrip();
 
     void OnStateChanged() override;

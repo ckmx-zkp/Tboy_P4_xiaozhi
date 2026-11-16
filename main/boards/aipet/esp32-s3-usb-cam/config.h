@@ -80,7 +80,7 @@
 
 #define WS2812_DIN_GPIO          GPIO_NUM_3
 #define WS2812_EN_GPIO           GPIO_NUM_42  // 模组脚 35 LED_EN，高电平给灯带供电
-#define WS2812_LED_COUNT         2
+#define WS2812_LED_COUNT         6
 // 原理图仅一路舵机 CN2（PH 3P）：1=GND，2=SE_PWMO=GPIO8，3=5V 经 D5。
 // 型号 MG90S：50Hz，脉宽约 0.5–2.5ms 对应 0–180°。背光占用 LEDC T0/CH0，舵机用 T1/CH1。
 #define SERVO_PWM_GPIO           GPIO_NUM_8

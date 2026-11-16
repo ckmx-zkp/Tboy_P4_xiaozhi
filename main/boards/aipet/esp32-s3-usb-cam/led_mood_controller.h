@@ -11,10 +11,10 @@
 #include <cstdio>
 #include <string>
 
-// 两颗 WS2812：话术切 12 星座 / 表情。颜色在色相附近随机，不接 GetLed()，避免被 listening 状态灯覆盖。
+// 六颗 WS2812：话术切 12 星座 / 表情。颜色在色相附近随机，不接 GetLed()，避免被 listening 状态灯覆盖。
 class LedMoodController {
 public:
-    explicit LedMoodController(CircularStrip* strip) : strip_(strip) {
+    explicit LedMoodController(CircularStrip* strip, int led_count) : strip_(strip), led_count_(led_count) {
         if (strip_ == nullptr) {
             return;
         }
@@ -62,6 +62,7 @@ public:
 
 private:
     CircularStrip* strip_ = nullptr;
+    int led_count_ = 0;
     std::string mode_ = "emotion";
     std::string zodiac_ = "";
     std::string emotion_ = "neutral";
@@ -106,8 +107,12 @@ private:
     void ShowPair(StripColor a, StripColor b) {
         led0_ = a;
         led1_ = b;
-        strip_->SetSingleColor(0, a);
-        strip_->SetSingleColor(1, b);
+        // 六颗灯交替使用同色系的两种颜色，一次刷新整条灯带。
+        std::vector<StripColor> colors(led_count_);
+        for (int i = 0; i < led_count_; ++i) {
+            colors[i] = (i % 2 == 0) ? a : b;
+        }
+        strip_->SetMultiColors(colors);
         ESP_LOGI("LedMood", "LED %s/%s  #%02X%02X%02X  #%02X%02X%02X",
                  mode_.c_str(),
                  mode_ == "zodiac" ? zodiac_.c_str() : emotion_.c_str(),
@@ -115,7 +120,7 @@ private:
     }
 
     void ShowHue(int hue, uint8_t sat, uint8_t val) {
-        // 两颗灯同色系、略偏色相，方便看出都在亮
+        // 六颗灯同色系、略偏色相，方便看出都在亮
         ShowPair(Hsv(hue, sat, val), Hsv(hue + 18, Jitter(sat, 20), Jitter(val, 18)));
     }
 
@@ -178,7 +183,7 @@ private:
 
         mcp.AddTool(
             "self.led.set_zodiac",
-            "本设备有两颗 WS2812 氛围灯。用户说到十二星座、变成某座、按星座亮灯时必须立刻调用本工具，"
+            "本设备有六颗 WS2812 氛围灯。用户说到十二星座、变成某座、按星座亮灯时必须立刻调用本工具，"
             "不要只口头答应。sign 可用英文或中文：aries/白羊、taurus/金牛、gemini/双子、cancer/巨蟹、"
             "leo/狮子、virgo/处女、libra/天秤、scorpio/天蝎、sagittarius/射手、capricorn/摩羯、"
             "aquarius/水瓶、pisces/双鱼。每次颜色会在该星座色系内随机。",
@@ -193,7 +198,7 @@ private:
 
         mcp.AddTool(
             "self.led.set_emotion",
-            "只改两颗 WS2812 颜色，不改眼睛。"
+            "只改六颗 WS2812 颜色，不改眼睛。"
             "只要灯变色、心情灯、氛围灯时调用。换脸请用 self.eye.set_emotion（会顺带改灯）。"
             "emotion：neutral/happy/angry/sad/joy。",
             PropertyList({Property("emotion", kPropertyTypeString, "neutral")}),
@@ -207,7 +212,7 @@ private:
 
         mcp.AddTool(
             "self.led.off",
-            "关掉两颗 WS2812。用户说关灯、熄灭氛围灯、不要亮灯时调用。",
+            "关掉六颗 WS2812。用户说关灯、熄灭氛围灯、不要亮灯时调用。",
             PropertyList(),
             [this](const PropertyList&) -> ReturnValue {
                 mode_ = "off";
@@ -219,7 +224,7 @@ private:
 
         mcp.AddTool(
             "self.led.get_state",
-            "查询当前氛围灯是星座还是表情，以及两颗灯颜色。",
+            "查询当前氛围灯是星座还是表情，以及六颗灯颜色。",
             PropertyList(),
             [this](const PropertyList&) -> ReturnValue {
                 return StateJson();
