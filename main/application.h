@@ -126,6 +126,7 @@ public:
      * This includes closing audio channel, resetting protocol and ota objects
      */
     void ResetProtocol();
+    void BeginBleSocialSession(const std::string& invite);
 
 private:
     Application();
@@ -157,6 +158,8 @@ private:
     std::chrono::steady_clock::time_point social_test_deadline_;
     void PollSocialTest();
     void EndSocialTest();
+    bool ble_social_join_pending_ = false;
+    std::chrono::steady_clock::time_point ble_social_join_deadline_;
     void RestoreAfterMusic();
     std::unique_ptr<Ota> ota_;
 

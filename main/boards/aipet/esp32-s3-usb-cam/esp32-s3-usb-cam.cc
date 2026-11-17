@@ -16,6 +16,7 @@
 #include "mg90s_servo.h"
 #include "face_follow_controller.h"
 #include "servo_controller.h"
+#include "pet_ble_social.h"
 
 #include <esp_log.h>
 #include <esp_heap_caps.h>
@@ -60,6 +61,7 @@ private:
 #endif
     CircularStrip* led_strip_ = nullptr;
     LedMoodController* led_mood_ = nullptr;
+    PetBleSocial ble_social_;
     DualEyeDisplay* eyes_ = nullptr;
     EyeController* eye_ctrl_ = nullptr;
     Mg90sServo servo_;
@@ -223,6 +225,7 @@ private:
                             ESP_LOGW(TAG, "touch %s GPIO%d on raw=%u base=%d delta=%.3f",
                                      pad.silk, pad.pad, (unsigned)raw[i],
                                      (int)pad.baseline, delta);
+                            if (i == 0 && esp_timer_get_time() > 10000000) ble_social_.Touch();
                         }
                     } else {
                         pad.hits = 0;
@@ -587,6 +590,11 @@ public:
         xTaskCreate(ProbeMl307Task, "ml307_at", 4096, nullptr, 3, nullptr);
 #endif
         xTaskCreate(ListenK230Task, "k230_rx", 6144, this, 3, nullptr);
+        ble_social_.Start([this](bool rainbow, const std::string& invite) {
+            auto connect = [invite]() { Application::GetInstance().BeginBleSocialSession(invite); };
+            if (rainbow) led_mood_->PlaySocialRainbow(connect);
+            else connect();
+        });
     }
 
     Camera* GetCamera() override {

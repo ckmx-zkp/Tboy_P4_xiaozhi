@@ -262,7 +262,7 @@ void Application::Run() {
 
     while (true) {
         auto bits = xEventGroupWaitBits(event_group_, ALL_EVENTS, pdTRUE, pdFALSE,
-            (music_player_.HasPending() || music_session_ || !social_test_room_.empty()) ? pdMS_TO_TICKS(100) : portMAX_DELAY);
+            (music_player_.HasPending() || music_session_ || !social_test_room_.empty() || ble_social_join_pending_) ? pdMS_TO_TICKS(100) : portMAX_DELAY);
 
         if (bits & MAIN_EVENT_ERROR) {
             SetDeviceState(kDeviceStateIdle);
@@ -611,6 +611,8 @@ void Application::InitializeProtocol() {
         Schedule([this]() {
             StopMusic();
             EndSocialTest();
+            ble_social_join_pending_ = false;
+            audio_service_.SuspendVoiceInput(false, false);
             music_tts_barrier_ = false;
             auto display = Board::GetInstance().GetDisplay();
             display->SetChatMessage("system", "");
@@ -634,6 +636,7 @@ void Application::InitializeProtocol() {
             Schedule([this, action, id, turn_id]() {
                 if (action == "start" && social_test_room_.empty()) {
                     StopMusic();
+                    ble_social_join_pending_ = false;
                     social_test_room_ = id;
                     social_test_deadline_ = std::chrono::steady_clock::now() + std::chrono::seconds(180);
                     audio_service_.SuspendVoiceInput(true, false);
@@ -1102,6 +1105,11 @@ void Application::HandleStateChangedEvent() {
         case kDeviceStateListening:
             display->SetStatus(Lang::Strings::LISTENING);
             display->SetEmotion("neutral");
+            if (ble_social_join_pending_) {
+                audio_service_.SuspendVoiceInput(true, false);
+                audio_service_.EnableWakeWordDetection(false);
+                break;
+            }
 
             // Make sure the audio processor is running
             if (play_popup_on_listening_ || !audio_service_.IsAudioProcessorRunning()) {
@@ -1437,6 +1445,12 @@ void Application::EndSocialTest() {
 }
 
 void Application::PollSocialTest() {
+    if (ble_social_join_pending_ && std::chrono::steady_clock::now() >= ble_social_join_deadline_) {
+        ble_social_join_pending_ = false;
+        audio_service_.SuspendVoiceInput(false, false);
+        ESP_LOGW(TAG, "BLE social join timed out");
+        if (protocol_) protocol_->CloseAudioChannel();
+    }
     if (social_test_room_.empty()) return;
     if (std::chrono::steady_clock::now() >= social_test_deadline_) {
         EndSocialTest();
@@ -1451,4 +1465,27 @@ void Application::PollSocialTest() {
         ESP_LOGI(TAG, "SocialTest played room=%s turn=%s", social_test_room_.c_str(), social_test_turn_.c_str());
         social_test_turn_.clear();
     }
+}
+
+void Application::BeginBleSocialSession(const std::string& invite) {
+    Schedule([this, invite]() {
+        const auto state = GetDeviceState();
+        if (!protocol_ || !social_test_room_.empty() || ble_social_join_pending_ ||
+            (state != kDeviceStateIdle && state != kDeviceStateListening)) return;
+        ble_social_join_pending_ = true;
+        ble_social_join_deadline_ = std::chrono::steady_clock::now() + std::chrono::seconds(25);
+        audio_service_.SuspendVoiceInput(true, false);
+        if (!protocol_->IsAudioChannelOpened()) {
+            SetDeviceState(kDeviceStateConnecting);
+            if (!protocol_->OpenAudioChannel()) {
+                ble_social_join_pending_ = false;
+                audio_service_.SuspendVoiceInput(false, false);
+                SetDeviceState(kDeviceStateIdle);
+                return;
+            }
+        }
+        SetDeviceState(kDeviceStateListening);
+        protocol_->SendSocialTestMessage("{\"type\":\"social_test\",\"state\":\"join\",\"invite_id\":\"" + invite + "\"}");
+        ESP_LOGI(TAG, "BLE social joined invite=%s", invite.c_str());
+    });
 }

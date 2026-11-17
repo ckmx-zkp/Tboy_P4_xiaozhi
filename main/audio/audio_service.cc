@@ -1,6 +1,7 @@
 #include "audio_service.h"
 #include <esp_log.h>
 #include <cstring>
+#include <freertos/idf_additions.h>
 
 #define RATE_CVT_CFG(_src_rate, _dest_rate, _channel)        \
     (esp_ae_rate_cvt_cfg_t)                                  \
@@ -159,11 +160,20 @@ void AudioService::Start() {
 #endif
 
     /* Start the opus codec task */
+#if CONFIG_BOARD_TYPE_AIPET_ESP32_S3_USB_CAM && CONFIG_BT_NIMBLE_ENABLED
+    // 本板 BLE 控制器占用片内 RAM；Opus 栈不承担 DMA，放到已有 PSRAM。
+    auto opus_task_result = xTaskCreateWithCaps([](void* arg) {
+        static_cast<AudioService*>(arg)->OpusCodecTask();
+        vTaskDeleteWithCaps(nullptr);
+    }, "opus_codec", 2048 * 12, this, 2, &opus_codec_task_handle_, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    configASSERT(opus_task_result == pdPASS);
+#else
     xTaskCreate([](void* arg) {
         AudioService* audio_service = (AudioService*)arg;
         audio_service->OpusCodecTask();
         vTaskDelete(NULL);
     }, "opus_codec", 2048 * 12, this, 2, &opus_codec_task_handle_);
+#endif
 }
 
 void AudioService::Stop() {

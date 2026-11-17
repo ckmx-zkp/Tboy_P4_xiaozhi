@@ -10,6 +10,10 @@
 #include <algorithm>
 #include <cstdio>
 #include <string>
+#include <atomic>
+#include <functional>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 // 六颗 WS2812：话术切 12 星座 / 表情。颜色在色相附近随机，不接 GetLed()，避免被 listening 状态灯覆盖。
 class LedMoodController {
@@ -20,6 +24,32 @@ public:
         }
         ApplyEmotion("neutral");
         RegisterTools();
+    }
+
+    bool PlaySocialRainbow(std::function<void()> done) {
+        if (rainbow_active_.exchange(true)) return false;
+        struct Animation { LedMoodController* self; StripColor a; StripColor b; std::function<void()> done; };
+        auto* animation = new Animation{this, led0_, led1_, std::move(done)};
+        auto result = xTaskCreate([](void* arg) {
+            auto* job = static_cast<Animation*>(arg);
+            auto* self = job->self;
+            ESP_LOGI("LedMood", "Social rainbow start; one cycle");
+            for (int frame = 0; frame < 24; ++frame) {
+                std::vector<StripColor> colors(self->led_count_);
+                for (int i = 0; i < self->led_count_; ++i)
+                    colors[i] = Hsv(frame * 15 + i * 60, 230, 90);
+                self->strip_->SetMultiColors(colors);
+                vTaskDelay(pdMS_TO_TICKS(40));
+            }
+            self->ShowPair(job->a, job->b);
+            self->rainbow_active_.store(false);
+            ESP_LOGI("LedMood", "Social rainbow done");
+            job->done();
+            delete job;
+            vTaskDelete(nullptr);
+        }, "social_rgb", 3072, animation, 3, nullptr);
+        if (result != pdPASS) { delete animation; rainbow_active_.store(false); return false; }
+        return true;
     }
 
     bool ApplyEmotion(const std::string& raw) {  // 眼睛 MCP 也会调，跟着变色
@@ -63,6 +93,7 @@ public:
 private:
     CircularStrip* strip_ = nullptr;
     int led_count_ = 0;
+    std::atomic<bool> rainbow_active_{false};
     std::string mode_ = "emotion";
     std::string zodiac_ = "";
     std::string emotion_ = "neutral";

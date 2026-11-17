@@ -1097,6 +1097,7 @@ if(CONFIG_BOARD_TYPE_ESP_VOCAT)
 endif()
 if(CONFIG_BOARD_TYPE_AIPET_ESP32_S3_USB_CAM)
     list(APPEND MAIN_PRIV_REQUIRES_EXTRA
+        bt
         usb
         espressif__usb_host_uvc
     )
