@@ -79,3 +79,5 @@
 当前 config.json 为本板启用 NimBLE（广播/观察者、host 外部 RAM、Wi-Fi 共存）。只识别 COM7/COM25 固定测试角色；先广播发现并写 NVS 曾遇见标记，COM7 GPIO5 按下产生新邀请，COM25 测试自动接受；COM7 一次六灯彩虹完成后双方按同邀请打开已认证 WS 专用入场。正式 GATT 名片认证、泛化多设备和双触摸尚未实现。
 
 测试广播格式和 WS join 见 backend docs/06 当前测试协议。2970816 字节，OTA 槽余 29%，ELF 96d26670d；两台烧录校验与 BLE 发现/NVS 记录通过，物理触摸完整对话待验证。Opus 24KB 栈仅在本板+NimBLE 时放 PSRAM，避免 AFE 取数任务创建不足；已见双板 Audio detection task started，片内/PSRAM 分别打印。
+
+2026-11-17 补充实测：COM7 物理触摸后 BLE 邀请4d0ec6ef，COM25自动接受，COM7彩虹完成日志后两侧自动入场，房间7e3ad5692bae4f5c9014d8af554c5184四轮八段finished；用户确认触摸可启动对话。彩虹灯用户未具体观察，仍待目视验收。两侧恢复AFE通信任务，无断言/重启。
