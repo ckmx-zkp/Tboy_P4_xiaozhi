@@ -73,6 +73,8 @@ public:
     virtual void SendStopListening();
     virtual void SendAbortSpeaking(AbortReason reason);
     virtual void SendMcpMessage(const std::string& message);
+    // 双机测试回执仅通过当前已认证的设备连接发送。
+    bool SendSocialTestMessage(const std::string& message) { return SendText(message); }
 
 protected:
     std::function<void(const cJSON* root)> on_incoming_json_;

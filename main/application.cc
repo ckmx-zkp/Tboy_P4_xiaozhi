@@ -262,7 +262,7 @@ void Application::Run() {
 
     while (true) {
         auto bits = xEventGroupWaitBits(event_group_, ALL_EVENTS, pdTRUE, pdFALSE,
-            (music_player_.HasPending() || music_session_) ? pdMS_TO_TICKS(100) : portMAX_DELAY);
+            (music_player_.HasPending() || music_session_ || !social_test_room_.empty()) ? pdMS_TO_TICKS(100) : portMAX_DELAY);
 
         if (bits & MAIN_EVENT_ERROR) {
             SetDeviceState(kDeviceStateIdle);
@@ -336,6 +336,7 @@ void Application::Run() {
             }
         }
         PollMusic();
+        PollSocialTest();
     }
 }
 
@@ -609,6 +610,7 @@ void Application::InitializeProtocol() {
         rest_after_reply_.store(false);
         Schedule([this]() {
             StopMusic();
+            EndSocialTest();
             music_tts_barrier_ = false;
             auto display = Board::GetInstance().GetDisplay();
             display->SetChatMessage("system", "");
@@ -619,6 +621,33 @@ void Application::InitializeProtocol() {
     protocol_->OnIncomingJson([this, display](const cJSON* root) {
         // Parse JSON data
         auto type = cJSON_GetObjectItem(root, "type");
+        if (cJSON_IsString(type) && strcmp(type->valuestring, "social_test") == 0) {
+            auto state = cJSON_GetObjectItem(root, "state");
+            auto room = cJSON_GetObjectItem(root, "room_id");
+            auto turn = cJSON_GetObjectItem(root, "turn_id");
+            if (!cJSON_IsString(state) || !cJSON_IsString(room) || strlen(room->valuestring) != 32) return;
+            const std::string action = state->valuestring;
+            const std::string id = room->valuestring;
+            const std::string turn_id = cJSON_IsString(turn) ? turn->valuestring : "";
+            // 标识仅允许十六进制，防止回执 JSON 拼接注入。
+            if (id.find_first_not_of("0123456789abcdef") != std::string::npos) return;
+            Schedule([this, action, id, turn_id]() {
+                if (action == "start" && social_test_room_.empty()) {
+                    StopMusic();
+                    social_test_room_ = id;
+                    social_test_deadline_ = std::chrono::steady_clock::now() + std::chrono::seconds(180);
+                    audio_service_.SuspendVoiceInput(true, false);
+                    protocol_->SendSocialTestMessage("{\"type\":\"social_test\",\"state\":\"ready\",\"room_id\":\"" + id + "\"}");
+                    ESP_LOGI(TAG, "SocialTest ready room=%s; voice input suspended", id.c_str());
+                } else if (id == social_test_room_ && action == "turn" && turn_id.size() == 1 && turn_id[0] >= '1' && turn_id[0] <= '8') {
+                    social_test_turn_ = turn_id;
+                    social_test_pending_ack_ = false;
+                } else if (id == social_test_room_ && action == "end") {
+                    EndSocialTest();
+                }
+            });
+            return;
+        }
         if (strcmp(type->valuestring, "tts") == 0) {
             auto state = cJSON_GetObjectItem(root, "state");
             if (strcmp(state->valuestring, "start") == 0 && !voice_exit_.load()) {
@@ -647,6 +676,11 @@ void Application::InitializeProtocol() {
                 });
             } else if (strcmp(state->valuestring, "stop") == 0) {
                 Schedule([this]() {
+                    if (!social_test_room_.empty()) {
+                        accept_tts_audio_.store(false);
+                        social_test_pending_ack_ = !social_test_turn_.empty();
+                        return;
+                    }
                     if (voice_exit_.load()) {
                         accept_tts_audio_.store(false);
                         return;
@@ -838,6 +872,11 @@ void Application::StopListening() {
 }
 
 void Application::HandleToggleChatEvent() {
+    if (!social_test_room_.empty()) {
+        EndSocialTest();
+        if (protocol_) protocol_->CloseAudioChannel();
+        return;
+    }
     StopMusic();
     auto state = GetDeviceState();
     
@@ -1385,3 +1424,31 @@ void Application::ResetProtocol() {
     });
 }
 
+
+// 测试会话只承载云端排好的台词，不向普通 ASR 上传输入。
+void Application::EndSocialTest() {
+    if (social_test_room_.empty()) return;
+    ESP_LOGI(TAG, "SocialTest ended room=%s", social_test_room_.c_str());
+    social_test_room_.clear();
+    social_test_turn_.clear();
+    social_test_pending_ack_ = false;
+    audio_service_.SuspendVoiceInput(false, false);
+    if (GetDeviceState() == kDeviceStateSpeaking) SetDeviceState(kDeviceStateListening);
+}
+
+void Application::PollSocialTest() {
+    if (social_test_room_.empty()) return;
+    if (std::chrono::steady_clock::now() >= social_test_deadline_) {
+        EndSocialTest();
+        if (protocol_) protocol_->CloseAudioChannel();
+        return;
+    }
+    if (social_test_pending_ack_ && audio_service_.IsPlaybackDrained()) {
+        social_test_pending_ack_ = false;
+        if (protocol_) {
+            protocol_->SendSocialTestMessage("{\"type\":\"social_test\",\"state\":\"played\",\"room_id\":\"" + social_test_room_ + "\",\"turn_id\":\"" + social_test_turn_ + "\"}");
+        }
+        ESP_LOGI(TAG, "SocialTest played room=%s turn=%s", social_test_room_.c_str(), social_test_turn_.c_str());
+        social_test_turn_.clear();
+    }
+}

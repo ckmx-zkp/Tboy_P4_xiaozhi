@@ -151,6 +151,12 @@ private:
     std::atomic<bool> rest_after_reply_{false};
     std::chrono::steady_clock::time_point music_ready_after_;
     void PollMusic();
+    std::string social_test_room_;
+    std::string social_test_turn_;
+    bool social_test_pending_ack_ = false;
+    std::chrono::steady_clock::time_point social_test_deadline_;
+    void PollSocialTest();
+    void EndSocialTest();
     void RestoreAfterMusic();
     std::unique_ptr<Ota> ota_;
 
